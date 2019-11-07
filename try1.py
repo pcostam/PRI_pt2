@@ -23,7 +23,7 @@ def main():
     file_content = open_file()
     nodes = extractKeyphrasesTextRank(str(file_content), tag) 
     graph = buildGraph(nodes)
-    pagerank_scores = nx.pagerank(graph)
+    pagerank_scores = nx.pagerank(graph, max_iter = 50)
     print(pagerank_scores)
     return get_top_x(pagerank_scores, 5)
 
