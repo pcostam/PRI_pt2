@@ -2,25 +2,33 @@
 """
 Exercise 3
 """
-
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer 
 import math
 try1 = __import__('try1')
-def main():
-    doc = try1.open_file()
-    tfidf = tf_idf([doc])
+try2 = __import__('try2')
 
-    tf = do_tf([doc])
-    
-    idf = do_idf([doc], 4)
-    rankers = [tfidf, tf, idf]
-    RRF = RRFScore(rankers)
-    CombSum = CombSumScore(rankers)
-    CombMNZ = CombMNZScore(rankers)
-    print("RRF:", RRF)
-    print("CombSum:", CombSum)
-    print("CombMNZ:", CombMNZ)
+def main():
+    train_set, test_set  = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
+    #true_labels = try2.json_references(stem_or_not_stem = "not stem")
+    num = 0
+    for doc in train_set:
+        #doc = try1.open_file()
+        tfidf = tf_idf([doc])
+        tf = do_tf([doc])
+        idf = do_idf([doc], 4)
+        
+        rankers = [tfidf, tf, idf]
+        RRF = RRFScore(rankers)
+        CombSum = CombSumScore(rankers)
+        CombMNZ = CombMNZScore(rankers)
+        
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>DOC NUM:", num)
+        print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+        print("RRF:", RRF)
+        print("CombSum:", CombSum)
+        print("CombMNZ:", CombMNZ)
+        num +=1
 
 def CombMNZScore(rankers):
     dictCombMNZ = dict()
@@ -74,7 +82,7 @@ def do_count(doc):
      matrix = vectorizer_tf.fit_transform(doc)
      matrix = sparse.csr_matrix(matrix)
      matrix = matrix.tocoo()
-     print("matrix", matrix)
+     #print("matrix", matrix)
   
      feature_names = vectorizer_tf.get_feature_names()
      countDict = dict()
@@ -116,11 +124,11 @@ def do_tf(doc):
     
 def tf_idf(doc):
     #TRAIN
-    print("doc", doc)
+    #print("doc", doc)
     test_vector, vectorizer = tf_idf_train(doc)
     feature_names = vectorizer.get_feature_names()
     tfidfDict = do_tfidf(test_vector, feature_names)
-    print("tfIdfDict", tfidfDict)
+    #print("tfIdfDict", tfidfDict)
     return tfidfDict
   
 def do_tfidf(test_vector, feature_names):  
@@ -147,7 +155,7 @@ def tf_idf_train(docs, maxdf = 1, mindf = 1):
     matrix = vectorizer_tfidf.fit_transform(docs)
     test_vector = sparse.csr_matrix(matrix[0])
     test_vector = test_vector.tocoo()
-    print("test_vector", test_vector)
+    #print("test_vector", test_vector)
 
         
     return test_vector, vectorizer_tfidf
