@@ -6,16 +6,23 @@ import operator
 try1 = __import__('try1')
 try2 = __import__('try2')
 import numpy as np 
+from  more_itertools import unique_everseen
+import itertools
 
 def main():
     train_set, test_set  = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
     train_set = list(train_set)
     true_labels = try2.json_references(stem_or_not_stem = "not stem")
      
+    words_nodes = list()
+    for doc in train_set:
+        words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
+    words_nodes = list(unique_everseen(words_nodes))
+    
     
     #doc = try1.open_file()
-    vectorizer = tf_idf_train(train_set)
-    vectorizer_tf = do_tf_train(train_set)
+    vectorizer = tf_idf_train(train_set, words_nodes)
+    vectorizer_tf = do_tf_train(train_set, words_nodes)
     
     i = 0
     all_ap_RRF = list()
@@ -120,14 +127,15 @@ def RRFScore(rankers):
                     dictRRF[key] += 1/(50+rank)                
     return dictRRF
 
-def do_tf_train(doc):
+def do_tf_train(doc, vocab):
     vectorizer_tf = TfidfVectorizer(use_idf = False, 
                                            analyzer = 'word', 
                                            ngram_range=(1,3), 
                                            stop_words = 'english',
                                            token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z-]*[a-zA-Z]\b", 
                                            lowercase = True,
-                                           norm = 'l1')
+                                           norm = 'l1',
+                                           vocabulary=vocab)
     vectorizer_tf.fit_transform(doc)
         
     return vectorizer_tf
@@ -136,7 +144,7 @@ def do_tf_train(doc):
 #Creates vectorizer and fits it to the docs
 #@input:train set, parameter (optional) removes the n most frequent words 
 #@return: vectorizer 
-def tf_idf_train(docs, maxdf = 1, mindf = 1):      
+def tf_idf_train(docs, vocab,  maxdf = 1, mindf = 1):      
     vectorizer_tfidf = TfidfVectorizer(use_idf = True, 
                                            analyzer = 'word', 
                                            ngram_range=(1,3), 
@@ -145,7 +153,8 @@ def tf_idf_train(docs, maxdf = 1, mindf = 1):
                                            lowercase = True,
                                            max_df = maxdf,
                                            min_df = mindf,
-                                           norm = 'l1')
+                                           norm = 'l1',
+                                           vocabulary=vocab)
         
     vectorizer_tfidf.fit_transform(docs)
     #print("test_vector", test_vector)
