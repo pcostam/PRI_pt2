@@ -5,17 +5,25 @@ import math
 import operator
 try1 = __import__('try1')
 try2 = __import__('try2')
+import numpy as np 
 
 def main():
     train_set, test_set  = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
     train_set = list(train_set)
-    #true_labels = try2.json_references(stem_or_not_stem = "not stem")
+    true_labels = try2.json_references(stem_or_not_stem = "not stem")
+     
     
     #doc = try1.open_file()
     vectorizer = tf_idf_train(train_set)
     vectorizer_tf = do_tf_train(train_set)
+    
+    i = 0
+    all_ap_RRF = list()
+    all_ap_CombSum = list()
+    all_ap_CombMNZ = list()
+    for key, test_doc in test_set.items():
+        y_true = true_labels[key]
         
-    for test_doc in list(test_set.values())[:15]:
         tfidf = vectorizer.transform(test_doc)
         tf    = vectorizer_tf.transform(test_doc)
         idf   = vectorizer.idf_
@@ -34,13 +42,44 @@ def main():
         CombSum = sorted(CombSum.items(), key = operator.itemgetter(1), reverse = True)
         CombMNZ = sorted(CombMNZ.items(), key = operator.itemgetter(1), reverse = True)
         
-        print(">>>RRF: "    ,RRF[:5])
-        print(">>>CombSum: ",CombSum[:5])
-        print(">>>CombMNZ: ",CombMNZ[:5])            
+        y_pred_RRF = [i[0] for i in RRF[:5]] 
+        y_pred_CombSum = [i[0] for i in CombSum[:5]]
+        y_pred_CombMNZ = [i[0] for i in CombMNZ[:5]]
+        
+        RRF_avg_precision     = average_precision_score(y_true, y_pred_RRF)
+        all_ap_RRF.append(RRF_avg_precision)
+        
+        CombSum_avg_precision = average_precision_score(y_true, y_pred_CombSum)
+        all_ap_CombSum.append(CombSum_avg_precision)
+        
+        CombMNZ_avg_precision = average_precision_score(y_true, y_pred_CombMNZ)
+        all_ap_CombMNZ.append(CombSum_avg_precision)
+        
+        #print(">>>RRF: "    ,RRF[:5])
+        #print(">>>CombSum: ",CombSum[:5])
+        #print(">>>CombMNZ: ",CombMNZ[:5])     
+        print("RRF_avg_precision", RRF_avg_precision)
+        print("CombSum_avg_precision", CombSum_avg_precision)
+        print("CombMNZ_avg_precision", CombMNZ_avg_precision)
     
         #print("RRF:", RRF)
         #print("CombSum:", CombSum)
         #print("CombMNZ:", CombMNZ)
+        
+    
+        if(i == 14):
+          break
+        else:
+            i += 1
+            
+    mean_average_score_RRF = np.array(all_ap_RRF)/len(all_ap_RRF)
+    mean_average_score_CombSum = np.array(all_ap_CombSum)/len(all_ap_CombSum)
+    mean_average_score_CombMNZ = np.array(all_ap_CombSum)/len(all_ap_CombMNZ)
+    
+    print("RRF_avg_precision",  mean_average_score_RRF)
+    print("CombSum_avg_precision", mean_average_score_CombSum )
+    print("CombMNZ_avg_precision",  mean_average_score_CombMNZ)
+    
     
 def CombMNZScore(rankers):
     dictCombMNZ = dict()
@@ -119,3 +158,22 @@ def do_tfidf_test(test_vector, feature_names):
         name = feature_names[col]
         dictTfidf[name] = data
     return dictTfidf
+
+
+def average_precision_score(y_true, y_pred):
+    nr_relevants = 0
+    i = 0
+    ap_at_sum = 0
+  
+    for el in y_pred:
+        i += 1
+        
+        #is relevant
+        if el in y_true:
+            nr_relevants += 1
+            ap_at_sum += nr_relevants/i
+        
+    if(nr_relevants == 0):
+        return 0
+    
+    return ap_at_sum/nr_relevants
