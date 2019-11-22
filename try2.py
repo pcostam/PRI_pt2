@@ -9,6 +9,7 @@ import xml.dom.minidom
 import networkx as nx
 import json
 import os
+import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer 
 import itertools
 from  more_itertools import unique_everseen
@@ -21,7 +22,7 @@ def main():
     train_set, test_set  = get_dataset("test", t="word", stem_or_not_stem = "not stem")
     true_labels = json_references(stem_or_not_stem = "not stem")
     
-    
+
     prior_weights = get_prior_weights(train_set, test_set, variant = "bm25")
     #print(prior_weights)
     
@@ -150,7 +151,6 @@ def get_prior_weights(train_set, test_set, variant = "length_and_position"):
 
         for doc in list(train_set):
             words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
-        words_nodes = list(unique_everseen(words_nodes))
         
         if variant == "tfidf":
            #words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
@@ -178,12 +178,13 @@ def get_prior_weights(train_set, test_set, variant = "length_and_position"):
            #print(vectorizer.get_feature_names())
         
         if variant == "bm25":
-            bm25 = BM25(train_set)
-            
-            get_score = bm25._get_scores()
+            bm25 = BM25(words_nodes)
+            for doc in list(test_set.values()):
+                words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc[0])))
+                get_score = bm25.get_score(words_nodes)
             
             print(get_score)
-            raise
+
 #        
 #    else:
 #        print(">>UNKNOWN>>PRIOR WEIGHTS>>VARIANT")
@@ -251,8 +252,7 @@ class BM25(object):
         self.avgdl = 0
         self.no_terms = 0
         self.terms= []
-        self.doc_freqs = []
-        self.idf = []
+        self.idf = dict()
         self.doc_len = []
         self._initialize(corpus)
 
@@ -261,85 +261,50 @@ class BM25(object):
         nd = {}  # word -> number of documents with word
         num_doc = 0
         
+        print("_initialize")
+        
         for document in corpus:
             self.corpus_size += 1
             self.doc_len.append(len(document))
             num_doc += len(document)
-
-            frequencies = {}
+            term_docs = list()
+            
             for word in document:
+                if word not in nd:
+                    nd[word] = 1
+                elif word in nd and word not in term_docs :
+                    nd[word] += 1 
+                term_docs.append(word)
+                    
                 if word not in self.terms:
                         self.terms.append(word)
                         self.no_terms +=1
-                if word not in frequencies:
-                    frequencies[word] = 0
-                frequencies[word] += 1
-            self.doc_freqs.append(frequencies)
-
-            for word, freq in iteritems(frequencies):
-                if word not in nd:
-                    nd[word] = 0
-                nd[word] += 1
-
+     
         self.avgdl = float(num_doc) / self.corpus_size
         # collect idf sum to calculate an average idf for epsilon value
         
         # collect words with negative idf to set them a special epsilon value.
         # idf can be negative if word is contained in more than half of documents
-        
-        for document in corpus:
-            inv_doc_freq = {}
-            negative_idfs = []
-            idf_sum = 0
-            for word in document:
-                for word, freq in iteritems(nd):
-                    inv_doc_freq[word] = math.log(self.corpus_size - freq + 0.5) - math.log(freq + 0.5)
-                    idf_sum += inv_doc_freq[word]
-                    if inv_doc_freq[word] < 0:
-                        negative_idfs.append(word)
+        #for document in corpus:
+            #negative_idfs = []
+            #idf_sum = 0
+            #for word in document:
+        for word, freq in iteritems(nd):
+            self.idf[word] = math.log(self.corpus_size - freq + 0.5) - math.log(freq + 0.5)
+                    #idf_sum += idf[word]
+                    #if inv_doc_freq[word] < 0:
+                     #   negative_idfs.append(word)
                 
-                self.average_idf = float(idf_sum) / len(inv_doc_freq)
-                for word, freq in iteritems(nd):
-                    for word in negative_idfs:
-                        inv_doc_freq[word] = EPSILON * self.average_idf
-            self.idf.append(inv_doc_freq)
-        self.tfidf_matrix = lil_matrix((self.corpus_size, self.no_terms), dtype=float)
+                #self.average_idf = float(idf_sum) / len(inv_doc_freq)
+                
+                #for word, freq in iteritems(nd):
+                 #   for word in negative_idfs:
+                  #      inv_doc_freq[word] = EPSILON * self.average_idf
+            #self.idf.append(inv_doc_freq)
         
-    def _get_scores(bm25, document):
-        """Helper function for retrieving bm25 scores of given `document`
-        in relation to every item in corpus.
-        
-        Parameters
-        ----------
-        bm25 : BM25 object
-            BM25 object fitted on the corpus where documents are retrieved.
-        document : list of str
-            Document to be scored.
-            
-        Returns
-        -------
-        list of float
-            BM25 scores.
-        """
-        return bm25.get_scores(document)
+        print("end_initialize")
     
-    def get_scores(self, document):
-        """Computes and returns BM25 scores of given `document` in relation to
-        every item in corpus.
-        Parameters
-        ----------
-        document : list of str
-            Document to be scored.
-        Returns
-        -------
-        list of float
-            BM25 scores.
-        """
-        for index in range(self.corpus_size):
-            scores = self.get_score(document, index)
-        return scores
-    
-    def get_score(self, document, index):
+    def get_score(self, document):
         """Computes BM25 score of given `document` in relation to item of corpus selected by `index`.
         Parameters
         ----------
@@ -353,12 +318,25 @@ class BM25(object):
             BM25 score.
         """
         score = 0
-        doc_freqs = self.doc_freqs[index]
+        frequencies = dict()
+        terms = list()
+        no_terms = 0
+        score = dict()
         for word in document:
-            if word not in doc_freqs:
-                continue
-            score += (self.idf[word] * doc_freqs[word] * (PARAM_K1 + 1)
-                      / (doc_freqs[word] + PARAM_K1 * (1 - PARAM_B + PARAM_B * self.doc_len[index] / self.avgdl)))
+            no_terms +=1
+            if word not in terms:
+                    terms.append(word)
+                   
+            if word not in frequencies.keys():
+                frequencies[word] = 0
+            frequencies[word] += 1
+                    
+        for word in frequencies.keys():
+            term_freq = frequencies[word]/no_terms    
+            idf = 0.25
+            if word in self.idf.keys():
+                idf = self.idf[word]
+            score[word] = (idf * term_freq * (PARAM_K1 + 1) / (term_freq + PARAM_K1 * (1 - PARAM_B + PARAM_B * no_terms / self.avgdl)))
         return score
         
     

@@ -71,23 +71,23 @@ def extractKeyphrasesTextRank(file_content, tags = ['NN', 'NNS', 'NNP', 'NNPS', 
     words_nodes=list()
     for sent in sent_tokens_filtered:
         sent_grams=list()
-        unigram = list(itertools.combinations(nltk.word_tokenize(sent), 1))
+        unigram = list(nltk.ngrams(nltk.word_tokenize(sent), 1))
         for gram in unigram:
             sent_grams.append(' '.join(gram))
-        bigram = list(itertools.combinations(nltk.word_tokenize(sent), 2))
+        bigram = list(nltk.ngrams(nltk.word_tokenize(sent), 2))
         for gram in bigram:
             sent_grams.append(' '.join(gram))
-        trigram = list(itertools.combinations(nltk.word_tokenize(sent), 3))
+        trigram = list(nltk.ngrams(nltk.word_tokenize(sent), 3))
         for gram in trigram:
             sent_grams.append(' '.join(gram))
         #print(sent_grams)
-    
+        
         #List unique elements, preserving order. Remember all elements ever seen.
-        sent_grams_set = list(unique_everseen(sent_grams))
+        #sent_grams_set = list(unique_everseen(sent_grams))
         #print(sent_grams_set)
         
         
-        words_nodes +=[sent_grams_set]
+        words_nodes.append(sent_grams)
     #print("word_nodes>>", words_nodes)        
 
     return words_nodes
