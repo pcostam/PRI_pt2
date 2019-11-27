@@ -12,18 +12,16 @@ from nltk.corpus import stopwords
 import string
 #from nltk.stem import WordNetLemmatizer 
 import networkx as nx
-import itertools
 from collections import Counter 
-from  more_itertools import unique_everseen
 
-try2 = __import__('try2')
+#try2 = __import__('try2')
 
 fIn = "corpus.txt"
 stopwords_punctuation  = set(stopwords.words('english')).union(string.punctuation)
 
 def main():
     file_content = open_file()
-    nodes = extractKeyphrasesTextRank(str(file_content))
+    nodes = extractKeyphrasesTextRank(str(file_content), exercise2=True)
     graph = buildGraph(nodes, exercise2 = False)    
     pagerank_scores = nx.pagerank(graph, max_iter = 50)
     #print(pagerank_scores)
@@ -45,6 +43,7 @@ def open_file():
 def extractKeyphrasesTextRank(file_content, tags = ['NN', 'NNS', 'NNP', 'NNPS', 'JJ', 'JJR', 'JJS'], exercise2 = False):
     # tokenize into sentences
     sent_tokens = sent_tokenize(file_content)
+
     #print(sent_tokens)
     
     # remove stopwords, punctuation also makes lowering and lemmanize
@@ -65,34 +64,36 @@ def extractKeyphrasesTextRank(file_content, tags = ['NN', 'NNS', 'NNP', 'NNPS', 
         for item in tagged_sents:
             if item[1] in tags and sent not in sent_tokens_filtered:
                 sent_tokens_filtered.append(sent)
-    #print(sent_tokens_filtered)
-    
+    #print(">>>", sent_tokens_filtered)
     #List with uni- bi- and trigrams per sentence
     words_nodes=list()
     for sent in sent_tokens_filtered:
+                
         sent_grams=list()
         unigram = list(nltk.ngrams(nltk.word_tokenize(sent), 1))
         for gram in unigram:
             sent_grams.append(' '.join(gram))
+        #print(uni_grams)
         bigram = list(nltk.ngrams(nltk.word_tokenize(sent), 2))
         for gram in bigram:
             sent_grams.append(' '.join(gram))
+            
         trigram = list(nltk.ngrams(nltk.word_tokenize(sent), 3))
         for gram in trigram:
             sent_grams.append(' '.join(gram))
+            
         #print(sent_grams)
-        
+        #words_nodes +=[sent_grams_set]
+        words_nodes.append(sent_grams)
+    #print("word_nodes>>", words_nodes) 
+    
         #List unique elements, preserving order. Remember all elements ever seen.
         #sent_grams_set = list(unique_everseen(sent_grams))
-        #print(sent_grams_set)
-        
-        
-        words_nodes.append(sent_grams)
-    #print("word_nodes>>", words_nodes)        
+        #print(sent_grams_set)               
 
     return words_nodes
       
-def buildGraph(nodes, exercise2 = False): 
+def buildGraph(nodes, edge_weights = [], exercise2 = False): 
     gr = nx.Graph()  # initialize an undirected graph
     #print("nodes>>>>", nodes)
     for sent in nodes:
@@ -103,12 +104,10 @@ def buildGraph(nodes, exercise2 = False):
                     if  exercise2 == False:
                         gr.add_edge(sent[gram1], sent[gram2], weight = 1)
                         print("add edge>>", sent[gram1], sent[gram2])
-#                    #AQUIIIII
-#                    if exercise2 == True:
-#                        gr.add_weighted_edges_from(())
-#                    else:
-#                        print(">>UNKNOWN>>EDGE WEIGHTS>>VARIANT")
-  
+                    if exercise2 == True:
+                        gr.add_weighted_edges_from(edge_weights)
+                    else:
+                        print(">>UNKNOWN>>EDGE WEIGHTS>>VARIANT")
     return gr
 
 def get_top_x(pagerank_scores, x):
