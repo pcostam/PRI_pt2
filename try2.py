@@ -2,20 +2,21 @@
 """
 Created on Sun Nov 10 21:55:00 2019
 
-@author: 
+@author: LADYMARTINHA
 """
 from nltk.stem import PorterStemmer
 import xml.dom.minidom
 import networkx as nx
 import json
 import os
-import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer 
 import itertools
 from  more_itertools import unique_everseen
+from scipy.sparse import lil_matrix
 import numpy as np
 
 try1 = __import__('try1')
+try3 = __import__('try3')
 
 def main():
     
@@ -23,16 +24,35 @@ def main():
     true_labels = json_references(stem_or_not_stem = "not stem")
     
 
-    prior_weights = get_prior_weights(train_set, test_set, variant = "bm25")
+#    prior_weights = get_prior_weights(train_set, test_set, variant = "length_and_position")
+#    edge_weights = get_edge_weights(test_set, variant = "co-occurrences")
     #print(prior_weights)
+    all_mAP = list()
+    for key, test_doc in test_set.items():      
+        
+        prior_weights = get_prior_weights(train_set, test_doc[0], variant = "length_and_position")
+        edge_weights = get_edge_weights(train_set, test_doc[0], variant = "co-occurrences")
+        
+        nodes = try1.extractKeyphrasesTextRank(test_doc[0])         
+        graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
+        
+        pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
+        
+        doc_top_5 = try1.get_top_x(pagerank_scores, 5)
+        predicted_labels_doc = [x[0] for x in doc_top_5]
+        
+        true_labels_doc = true_labels[key]
+        
+        avg_precision_per_doc = try3.average_precision_score(true_labels_doc, predicted_labels_doc)
+        print("true>>", true_labels_doc)
+        print("predi>> ", predicted_labels_doc)
+        print("pred>>", avg_precision_per_doc)        
+        all_mAP.append(avg_precision_per_doc)
     
-#    for doc in docs:
-#        #nodes = try1.extractKeyphrasesTextRank(doc) 
-#        #talvez se possa separar na equação
-#        
-#        
-#        graph = try1.buildGraph(nodes)
-#        pagerank_scores = nx.pagerank(graph, max_iter = 50)
+    mAP = np.array(all_mAP)
+    print(mAP)
+    mAP = np.mean(mAP)
+    print(mAP)
     
     
 #Process XML file. Preprocesses text
@@ -72,7 +92,7 @@ def get_dataset(folder, t="word", stem_or_not_stem = "not stem"):
                     word = token.getElementsByTagName(t)[0].firstChild.data
                     if (t == 'word' and stem_or_not_stem == 'stem'):
                         word = ps.stem(word)
-                    if word == "." or word == "%" or word == "'s" or word == ",":   #MUDANÇA
+                    if word == "." or word == "%" or word == "'s" or word == "," or word == "'":   #MUDANÇA
                         sentence_string = sentence_string + word
                     else:
                         sentence_string = sentence_string + " " + word
@@ -117,40 +137,45 @@ def json_references(stem_or_not_stem = 'not stem'):
 
     return data
 
-def get_prior_weights(train_set, test_set, variant = "length_and_position"):
+def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
     words_nodes = []
     
-    prior_weights = []
+    #prior_weights = []
+    
+    score = dict()
             
     if variant == "length_and_position":      
-        #MAL
-        for doc in test_set.values():                     
-            words_nodes = try1.extractKeyphrasesTextRank(doc[0])
-            words_nodes = unique_everseen(words_nodes)
-            count_sent = 1
-            #print(doc)
-            #print(len(words_nodes))      6
-            prior_weights_sent = []
-            for sent in words_nodes:
-                #print(sent)             #6
-                length_position_sentence = []
-                for gram in sent:
-                    #print("gram", gram)
-                    length_position_sentence.append(len(gram.split()) + (1/count_sent)) #fator inversamente proporcional
-                #print(length_position_sentence)
-                prior_weights_sent.append(length_position_sentence)
-                count_sent += 1
-                #print("sent", sent, prior_weights_sent)
+        
+        #for doc in test_set.values():                     
+        words_nodes = try1.extractKeyphrasesTextRank(test_doc)
+        words_nodes = unique_everseen(words_nodes)
+        count_sent = 1
+        #print(doc)
+        #print(len(words_nodes))      6
+        ##prior_weights_sent = []
+        for sent in words_nodes:
+            #print(sent)             #6
+            ##length_position_sentence = []
+            for gram in sent:
+                #print("gram", gram)
+                ##length_position_sentence.append(len(gram.split()) + (1/count_sent)) #fator inversamente proporcional
+            #print(length_position_sentence)
+                score[gram] = len(gram.split()) + (1/count_sent) #NEW
+            ##prior_weights_sent.append(length_position_sentence)
+            count_sent += 1
+            #print("sent", sent, prior_weights_sent)
 
-            prior_weights.append(prior_weights_sent)
-        print(prior_weights)
-        print(len(list(itertools.chain.from_iterable(prior_weights))))
-        raise
+        ##prior_weights.append(prior_weights_sent)
+        #print(prior_weights)
+        #print(len(list(itertools.chain.from_iterable(prior_weights))))
+        #print("score>>", score)
+        
         
     elif(variant == "tfidf" or variant == "bm25"):
 
         for doc in list(train_set):
             words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
+        #words_nodes = list(unique_everseen(words_nodes))
         
         if variant == "tfidf":
            #words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
@@ -164,50 +189,129 @@ def get_prior_weights(train_set, test_set, variant = "length_and_position"):
         
                                         
            X = vectorizer.fit_transform(train_set)
+           #this is a mapping of index to
+           feature_names = vectorizer.get_feature_names()                      
+
+                
+           Y = vectorizer.transform(test_doc)
+           #y = Y.tocoo()
+           #print(y.shape[1])
+           sorted_items = sort_coo(Y.tocoo())
            
-           for doc in test_set.values():        
-               Y = vectorizer.transform(doc)
-           unnormalized_prior_weights = Y.toarray()                 
            
-           sum_prior_weights = np.sum(unnormalized_prior_weights, axis=0)
-           print(sum_prior_weights.shape)
-           for sum_docs in sum_prior_weights:
-               prior_weights.append(sum_docs/len(test_set.values()))
-           print(len(prior_weights))
+           score = extract_from_vector(feature_names,sorted_items)
+           #print(len(score))
+#           unnormalized_prior_weights = Y.toarray()                 
+#           
+#           sum_prior_weights = np.sum(unnormalized_prior_weights, axis=0)
+#           print(sum_prior_weights.shape)
+#           for sum_docs in sum_prior_weights:
+#               prior_weights.append(sum_docs/len(test_set.values()))
+#           print(len(prior_weights))
            #print(X.toarray())
            #print(vectorizer.get_feature_names())
         
         if variant == "bm25":
             bm25 = BM25(words_nodes)
-            for doc in list(test_set.values()):
-                words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc[0])))
-                get_score = bm25.get_score(words_nodes)
-            
-            print(get_score)
+            words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc)))
+            score = bm25.get_score(words_nodes)
+            #print(get_score)
+        
+    else:
+        print(">>UNKNOWN>>PRIOR WEIGHTS>>VARIANT")
+        
+    return score 
 
-#        
-#    else:
-#        print(">>UNKNOWN>>PRIOR WEIGHTS>>VARIANT")
-        
-    return prior_weights 
-          
-        
-runtime = {}
-runtime["co-occurrences"] = None       
-def get_edge_weights(gr, variant = "co-occurrences"):
-    if runtime["co-occurrences"] is None:
-        for candidate in gr.nodes:
-            runtime["co-occurrences"].append(gr.degree[candidate])
-        
+#sort the tf-idf vectors by descending order of scores          
+def sort_coo(coo_matrix):
+    tuples = zip(coo_matrix.col, coo_matrix.data)
+    return sorted(tuples, key=lambda x: (x[1], x[0]), reverse=True)
+
+#extract keyphrases and scores in a coherent format along the rest of the variants
+def extract_from_vector(feature_names, sorted_items):
+    """get the feature names and tf-idf score of top n items"""
+ 
+    score_vals = []
+    feature_vals = []
     
-#    if variant == "co-occurrences":
-#        
-#        
+    # word index and corresponding tf-idf score
+    for idx, score in sorted_items:
+        
+        #keep track of feature name and its corresponding score
+        score_vals.append(round(score, 3))
+        feature_vals.append(feature_names[idx])
+ 
+    #create a tuples of feature,score
+    #results = zip(feature_vals,score_vals)
+    results= {}
+    for idx in range(len(feature_vals)):
+        results[feature_vals[idx]]=score_vals[idx]
+    
+    return results       
+   
+from sklearn.feature_extraction.text import CountVectorizer    
+def get_edge_weights(train_set, test_doc, variant = "co-occurrences"):
+    final_weights = []
+    
+    words_nodes = []
+    for doc in train_set:
+        words_nodes += try1.extractKeyphrasesTextRank(doc)
+        #words_nodes = unique_everseen(words_nodes)
+    
+    if variant == "co-occurrences":
+        vectorizer = CountVectorizer(binary = True,
+                                     analyzer = 'word', 
+                                     ngram_range = (1,3), 
+                                     stop_words = 'english',
+                                     token_pattern = r"(?u)\b[a-zA-Z][a-zA-Z-]*[a-zA-Z]\b", 
+                                     lowercase = True,
+                                     vocabulary = list(unique_everseen(itertools.chain.from_iterable(words_nodes)))
+                                     )
+        vectorizer._validate_vocabulary()
+        #print(list(itertools.chain.from_iterable(unique_everseen(words_nodes))))
+        #vectorizer.fit(list(unique_everseen(itertools.chain.from_iterable(words_nodes))))
+        
+        
+        #for doc in test_set.values():               
+        #https://stackoverflow.com/questions/35562789/how-do-i-calculate-a-word-word-co-occurrence-matrix-with-sklearn
+        #https://github.com/scikit-learn/scikit-learn/issues/10901
+        
+        test_doc_candidates =  try1.extractKeyphrasesTextRank(test_doc)
+        test_doc_normalized = [' '.join(sentence) for sentence in test_doc_candidates]
+        
+        X = vectorizer.fit_transform(test_doc_normalized)
+        #print(vectorizer.vocabulary_)
+        X = lil_matrix(X)
+        Xc = (X.T * X) # this is co-occurrence matrix in sparse csr format
+        #Xc[Xc > 0] = 1 # run this line if you don't want extra within-text cooccurence (see below) bem explicado no link above 
+        Xc.setdiag(0) #  fill same word cooccurence to 0
+        Xc = lil_matrix(Xc)
+#        print(vectorizer.get_feature_names())
+#        print("Xc", Xc)
+#        raise
+        feature_names = vectorizer.get_feature_names()
+        final_weights = format_weights(Xc.tocoo(), feature_names)
+        
+    return final_weights
+        
+        #print(Xc.toarray()) # print out matrix in dense format
+
 #    if variant == "embeddings":
+# https://www.irit.fr/publis/SIG/2018_SAC_MRR.pdf
+#        https://gluon-nlp.mxnet.io/examples/word_embedding/word_embedding.html
+#https://kavita-ganesan.com/easily-access-pre-trained-word-embeddings-with-gensim/#.Xd1ikej7Q2w QUEEN
+#https://www.shanelynn.ie/word-embeddings-in-python-with-spacy-and-gensim/        
+#    if variant == "distance_between_candidates":
         
-    
-    
-    
+def format_weights(Xc, feature_names):
+    listTuplesWeights = []
+    for  line, column, data in zip(Xc.row, Xc.col, Xc.data):
+        if(line != column):
+            listTuplesWeights.append(tuple([feature_names[line], feature_names[column], data]))
+    return listTuplesWeights
+    #for candidate in        
+        
+
 #if __name__ == "__main__":
 #    main()
     
@@ -217,8 +321,6 @@ def get_edge_weights(gr, variant = "co-occurrences"):
 ############################################BM25############################################
 import math
 from six import iteritems
-from six.moves import range
-from scipy.sparse import lil_matrix
 
 PARAM_K1 = 1.5
 PARAM_B = 0.75
@@ -338,24 +440,3 @@ class BM25(object):
                 idf = self.idf[word]
             score[word] = (idf * term_freq * (PARAM_K1 + 1) / (term_freq + PARAM_K1 * (1 - PARAM_B + PARAM_B * no_terms / self.avgdl)))
         return score
-        
-    
-
-#    def get_score(self, doc_index, index_term):
-#        score = 0
-# 
-#        word = self.terms[index_term]
-#        if word in self.idf[doc_index].keys():
-#            if word in self.doc_freqs[doc_index].keys():           
-#                term_freqs = self.doc_freqs[doc_index][word]
-#                score = (self.idf[doc_index][word]) * (term_freqs * (PARAM_K1 + 1)
-#                        / (term_freqs + PARAM_K1 * (1- PARAM_B + PARAM_B * self.doc_len[doc_index]/ self.avgdl)))
-#        return score
-#    
-#    def get_scores(self):
-#        for doc_index in range(0, self.corpus_size):
-#            for term_index in range(0, self.no_terms):
-#                tfidf = self.get_score(doc_index, term_index)  #* len(" ".split(self.terms[term_index]))
-#                self.tfidf_matrix[doc_index, term_index] = tfidf
-#        #print("tfidf_matrix", self.tfidf_matrix)
-#        return self.tfidf_matrix
