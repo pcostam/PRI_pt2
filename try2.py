@@ -28,26 +28,34 @@ def main():
 #    edge_weights = get_edge_weights(test_set, variant = "co-occurrences")
     #print(prior_weights)
     all_mAP = list()
-    for key, test_doc in test_set.items():      
-        
-        prior_weights = get_prior_weights(train_set, test_doc[0], variant = "length_and_position")
-        edge_weights = get_edge_weights(train_set, test_doc[0], variant = "co-occurrences")
-        
-        nodes = try1.extractKeyphrasesTextRank(test_doc[0])         
-        graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
-        
-        pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
-        
-        doc_top_5 = try1.get_top_x(pagerank_scores, 5)
-        predicted_labels_doc = [x[0] for x in doc_top_5]
+    for key, test_doc in test_set.items():
         
         true_labels_doc = true_labels[key]
-        
-        avg_precision_per_doc = try3.average_precision_score(true_labels_doc, predicted_labels_doc)
-        print("true>>", true_labels_doc)
-        print("predi>> ", predicted_labels_doc)
-        print("pred>>", avg_precision_per_doc)        
-        all_mAP.append(avg_precision_per_doc)
+        if len(true_labels_doc) >= 5:
+            
+            test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
+            
+            
+            
+            prior_weights = get_prior_weights(train_set, test_doc, variant = "length_and_position")
+            edge_weights = get_edge_weights(train_set, test_doc, variant = "co-occurrences")
+            
+            nodes = try1.extractKeyphrasesTextRank(test_doc) 
+            graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
+            
+            pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
+            
+            doc_top_5 = try1.get_top_x(pagerank_scores, 5)
+            predicted_labels_doc = [x[0] for x in doc_top_5]
+            
+            
+            
+            
+            avg_precision_per_doc = try3.average_precision_score(true_labels_doc, predicted_labels_doc)
+            print("true>>", true_labels_doc)
+            print("predi>> ", predicted_labels_doc)
+            print("pred>>", avg_precision_per_doc)        
+            all_mAP.append(avg_precision_per_doc)
     
     mAP = np.array(all_mAP)
     print(mAP)
@@ -185,7 +193,7 @@ def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
                                         stop_words = 'english',
                                         token_pattern = r"(?u)\b[a-zA-Z][a-zA-Z-]*[a-zA-Z]\b", 
                                         lowercase = True,
-                                        vocabulary = iter(list(unique_everseen(words_nodes))))
+                                        vocabulary = list(unique_everseen(words_nodes)))
         
                                         
            X = vectorizer.fit_transform(train_set)
@@ -193,7 +201,7 @@ def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
            feature_names = vectorizer.get_feature_names()                      
 
                 
-           Y = vectorizer.transform(test_doc)
+           Y = vectorizer.transform([test_doc])
            #y = Y.tocoo()
            #print(y.shape[1])
            sorted_items = sort_coo(Y.tocoo())
@@ -213,8 +221,8 @@ def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
         
         if variant == "bm25":
             bm25 = BM25(words_nodes)
-            words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc)))
-            score = bm25.get_score(words_nodes)
+            #words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc)))
+            score = bm25.get_score(test_doc)
             #print(get_score)
         
     else:
@@ -267,12 +275,7 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences"):
                                      lowercase = True,
                                      vocabulary = list(unique_everseen(itertools.chain.from_iterable(words_nodes)))
                                      )
-        vectorizer._validate_vocabulary()
-        #print(list(itertools.chain.from_iterable(unique_everseen(words_nodes))))
-        #vectorizer.fit(list(unique_everseen(itertools.chain.from_iterable(words_nodes))))
-        
-        
-        #for doc in test_set.values():               
+        vectorizer._validate_vocabulary()                
         #https://stackoverflow.com/questions/35562789/how-do-i-calculate-a-word-word-co-occurrence-matrix-with-sklearn
         #https://github.com/scikit-learn/scikit-learn/issues/10901
         
@@ -280,7 +283,6 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences"):
         test_doc_normalized = [' '.join(sentence) for sentence in test_doc_candidates]
         
         X = vectorizer.fit_transform(test_doc_normalized)
-        #print(vectorizer.vocabulary_)
         X = lil_matrix(X)
         Xc = (X.T * X) # this is co-occurrence matrix in sparse csr format
         #Xc[Xc > 0] = 1 # run this line if you don't want extra within-text cooccurence (see below) bem explicado no link above 
@@ -291,6 +293,12 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences"):
 #        raise
         feature_names = vectorizer.get_feature_names()
         final_weights = format_weights(Xc.tocoo(), feature_names)
+        
+#        import spacy
+#        if variant == "embeddings":
+#            nlp = spacy.load('wiki-news-300d-1M')
+#            print(ol)
+#            
         
     return final_weights
         
@@ -324,7 +332,6 @@ from six import iteritems
 
 PARAM_K1 = 1.5
 PARAM_B = 0.75
-EPSILON = 0.25
 
 
 class BM25(object):
