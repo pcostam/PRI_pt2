@@ -104,10 +104,8 @@ def buildGraph(nodes, edge_weights = [], exercise2 = False):
                     if  exercise2 == False:
                         gr.add_edge(sent[gram1], sent[gram2], weight = 1)
                         print("add edge>>", sent[gram1], sent[gram2])
-                    if exercise2 == True:
-                        gr.add_weighted_edges_from(edge_weights)
-                    else:
-                        print(">>UNKNOWN>>EDGE WEIGHTS>>VARIANT")
+    if exercise2 == True:
+        gr.add_weighted_edges_from(edge_weights)
     return gr
 
 def get_top_x(pagerank_scores, x):
