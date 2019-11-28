@@ -88,13 +88,13 @@ def main():
         
     
             
-    #mean_average_score_RRF = np.array(all_ap_RRF)/len(all_ap_RRF)
-    #mean_average_score_CombSum = np.array(all_ap_CombSum)/len(all_ap_CombSum)
-    #mean_average_score_CombMNZ = np.array(all_ap_CombSum)/len(all_ap_CombMNZ)
+    mean_average_score_RRF = np.mean(np.array(all_ap_RRF))
+    mean_average_score_CombSum = np.mean(np.array(all_ap_CombSum))
+    mean_average_score_CombMNZ = np.mean(np.array(all_ap_CombSum))
     
-    #print("RRF_avg_precision",  mean_average_score_RRF)
-    #print("CombSum_avg_precision", mean_average_score_CombSum )
-    #print("CombMNZ_avg_precision",  mean_average_score_CombMNZ)
+    print("RRF_avg_precision",  mean_average_score_RRF)
+    print("CombSum_avg_precision", mean_average_score_CombSum )
+    print("CombMNZ_avg_precision",  mean_average_score_CombMNZ)
     
 def vector_scores(test_vector, feature_names):
     test_vector = test_vector.toarray()
