@@ -8,6 +8,7 @@ try2 = __import__('try2')
 import numpy as np 
 from  more_itertools import unique_everseen
 import itertools
+from nltk import word_tokenize
 
 def main():
     train_set, test_set  = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
@@ -19,16 +20,20 @@ def main():
         words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
     words_nodes = list(unique_everseen(words_nodes))
     
+    vectorizer = tf_idf_train(train_set, words_nodes)
+    vectorizer_tf = do_tf_train(train_set, words_nodes)
     
-    #doc = try1.open_file()
-    vectorizer = tf_idf_train(train_set, words_nodes, maxdf=0.5, mindf=2)
-    vectorizer_tf = do_tf_train(train_set, words_nodes, maxdf=0.5, mindf=2)
+    #bm25
+    bm25 = try2.BM25(train_set)
     
-    i = 0
     all_ap_RRF = list()
     all_ap_CombSum = list()
     all_ap_CombMNZ = list()
     for key, test_doc in test_set.items():
+        #preprocess test document
+        test_doc = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
+       
+
         print("key", key)
         y_true = true_labels[key]
         print("y_true", y_true)
@@ -40,9 +45,11 @@ def main():
         tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
         tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
         idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
-        
-        
-        rankers = [tfidf_name, tf_name, idf_name]
+       
+     
+        score_bm25 = bm25.get_score(test_doc)
+    
+        rankers = [tfidf_name, tf_name, idf_name, score_bm25]
         RRF     = RRFScore(rankers)
         CombSum = CombSumScore(rankers)
         CombMNZ = CombMNZScore(rankers)
@@ -80,14 +87,10 @@ def main():
         #print("CombMNZ:", CombMNZ)
         
     
-        if(i == 80):
-          break
-        else:
-            i += 1
             
-    mean_average_score_RRF = np.array(all_ap_RRF)/len(all_ap_RRF)
-    mean_average_score_CombSum = np.array(all_ap_CombSum)/len(all_ap_CombSum)
-    mean_average_score_CombMNZ = np.array(all_ap_CombSum)/len(all_ap_CombMNZ)
+    #mean_average_score_RRF = np.array(all_ap_RRF)/len(all_ap_RRF)
+    #mean_average_score_CombSum = np.array(all_ap_CombSum)/len(all_ap_CombSum)
+    #mean_average_score_CombMNZ = np.array(all_ap_CombSum)/len(all_ap_CombMNZ)
     
     #print("RRF_avg_precision",  mean_average_score_RRF)
     #print("CombSum_avg_precision", mean_average_score_CombSum )
@@ -172,8 +175,7 @@ def tf_idf_train(docs, vocab,  maxdf = 1, mindf = 1):
                                            vocabulary=vocab)
         
     vectorizer_tfidf.fit_transform(docs)
-    #print("test_vector", test_vector)
-    
+  
     return vectorizer_tfidf
 
 def map_name_score(test_vector, feature_names):  
