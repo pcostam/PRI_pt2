@@ -14,6 +14,7 @@ import itertools
 from  more_itertools import unique_everseen
 from scipy.sparse import lil_matrix
 import numpy as np
+import gensim
 
 try1 = __import__('try1')
 try3 = __import__('try3')
@@ -38,7 +39,7 @@ def main():
             
             
             prior_weights = get_prior_weights(train_set, test_doc, variant = "length_and_position")
-            edge_weights = get_edge_weights(train_set, test_doc, variant = "co-occurrences")
+            edge_weights = get_edge_weights(train_set, test_doc, variant = "embeddings")
             
             nodes = try1.extractKeyphrasesTextRank(test_doc) 
             graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
@@ -256,7 +257,13 @@ def extract_from_vector(feature_names, sorted_items):
         results[feature_vals[idx]]=score_vals[idx]
     
     return results       
-   
+
+def isNgram(term):
+    if(len(term.split()) >= 2):    
+        return True
+    return False
+
+
 from sklearn.feature_extraction.text import CountVectorizer    
 def get_edge_weights(train_set, test_doc, variant = "co-occurrences"):
     final_weights = []
@@ -294,11 +301,59 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences"):
         feature_names = vectorizer.get_feature_names()
         final_weights = format_weights(Xc.tocoo(), feature_names)
         
-#        import spacy
-#        if variant == "embeddings":
-#            nlp = spacy.load('wiki-news-300d-1M')
-#            print(ol)
-#            
+    if variant == "embeddings":
+        vocabulary = list(unique_everseen(itertools.chain.from_iterable(words_nodes)))
+
+        print("start load")
+        model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
+        print("end load")
+        
+        wv = model.wv
+        del model
+        
+        matrix = []
+        feature_names = []
+       
+        no_key = 0
+       
+        words_to_ignore = dict()
+        for term_i in vocabulary:
+            if term_i not in words_to_ignore:
+                row = []
+                for term_j in vocabulary:
+                    if term_j not in words_to_ignore:
+                        try:
+                            grams_i = term_i.split()
+                            grams_j = term_j.split()
+                            i = 0
+                            acc = 0
+                            for g_i in grams_i:
+                                print("g_i", g_i)
+                                for g_j in grams_j:
+                                        print("g_j", g_j)
+                                        i += 1
+                                        acc += wv.similarity(g_i, g_j)
+                            sim = acc/i
+                            row.append(sim)
+                    
+                        except KeyError as e:
+                            no_key += 1
+                            print("keyerror")
+                            print("no keyerror" , no_key)
+                            words_to_ignore[e.args[0]] = 0
+                            if e.args[0] == term_i:
+                                break
+                            elif e.args[0] == term_j:
+                                continue
+                       
+            matrix.append(row)
+       
+        final_weights = format_weight_matrix(matrix, feature_names)
+                    
+        
+                
+
+            
         
     return final_weights
         
@@ -318,6 +373,13 @@ def format_weights(Xc, feature_names):
             listTuplesWeights.append(tuple([feature_names[line], feature_names[column], data]))
     return listTuplesWeights
     #for candidate in        
+    
+def format_weight_matrix(matrix, feature_names):
+    listTuplesWeights = []
+    for line in range(0, matrix.shape[0]):
+        for  column in range(0, matrix.shape[1]):
+            listTuplesWeights.append(tuple([feature_names[line], feature_names[column], matrix[line][column]]))
+    return listTuplesWeights
         
 
 #if __name__ == "__main__":

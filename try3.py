@@ -10,6 +10,7 @@ from  more_itertools import unique_everseen
 import itertools
 from nltk import word_tokenize
 
+
 def main():
     train_set, test_set  = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
     train_set = list(train_set)
@@ -30,62 +31,66 @@ def main():
     all_ap_CombSum = list()
     all_ap_CombMNZ = list()
     for key, test_doc in test_set.items():
-        #preprocess test document
-        test_doc = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
-       
-
-        print("key", key)
+        
         y_true = true_labels[key]
-        print("y_true", y_true)
-        tfidf_vector = vectorizer.transform(test_doc)
-     
-        tf_vector    = vectorizer_tf.transform(test_doc)
-        idf   = vectorizer.idf_
-     
-        tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
-        tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
-        idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
-       
-     
-        score_bm25 = bm25.get_score(test_doc)
+        
+        if(len(y_true) >= 5):
+            #preprocess test document
+            test_doc = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
+           
     
-        rankers = [tfidf_name, tf_name, idf_name, score_bm25]
-        RRF     = RRFScore(rankers)
-        CombSum = CombSumScore(rankers)
-        CombMNZ = CombMNZScore(rankers)
+            print("key", key)
+          
+            print("y_true", y_true)
+            tfidf_vector = vectorizer.transform(test_doc)
+         
+            tf_vector    = vectorizer_tf.transform(test_doc)
+            idf   = vectorizer.idf_
+         
+            tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
+            tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
+            idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
+           
+         
+            score_bm25 = bm25.get_score(test_doc)
         
-        RRF_sorted     = sorted(RRF.items()    , key = operator.itemgetter(1), reverse = True)
-        CombSum_sorted = sorted(CombSum.items(), key = operator.itemgetter(1), reverse = True)
-        CombMNZ_sorted = sorted(CombMNZ.items(), key = operator.itemgetter(1), reverse = True)
+            rankers = [tfidf_name, tf_name, idf_name, score_bm25]
+            RRF     = RRFScore(rankers)
+            CombSum = CombSumScore(rankers)
+            CombMNZ = CombMNZScore(rankers)
+            
+            RRF_sorted     = sorted(RRF.items()    , key = operator.itemgetter(1), reverse = True)
+            CombSum_sorted = sorted(CombSum.items(), key = operator.itemgetter(1), reverse = True)
+            CombMNZ_sorted = sorted(CombMNZ.items(), key = operator.itemgetter(1), reverse = True)
+            
+            y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
+            y_pred_CombSum = [i[0] for i in CombSum_sorted[:5]]
+            y_pred_CombMNZ = [i[0] for i in CombMNZ_sorted[:5]]
+            
+            print(y_pred_RRF)
+            print(y_pred_CombSum)
+            print(y_pred_CombMNZ)
+            
+            RRF_avg_precision     = average_precision_score(y_true, y_pred_RRF)
+            all_ap_RRF.append(RRF_avg_precision)
+            
+            CombSum_avg_precision = average_precision_score(y_true, y_pred_CombSum)
+            all_ap_CombSum.append(CombSum_avg_precision)
+            
+            CombMNZ_avg_precision = average_precision_score(y_true, y_pred_CombMNZ)
+            all_ap_CombMNZ.append(CombSum_avg_precision)
+            
+            #print(">>>RRF: "    ,RRF[:5])
+            #print(">>>CombSum: ",CombSum[:5])
+            #print(">>>CombMNZ: ",CombMNZ[:5])     
+            print("RRF_avg_precision", RRF_avg_precision)
+            print("CombSum_avg_precision", CombSum_avg_precision)
+            print("CombMNZ_avg_precision", CombMNZ_avg_precision)
         
-        y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
-        y_pred_CombSum = [i[0] for i in CombSum_sorted[:5]]
-        y_pred_CombMNZ = [i[0] for i in CombMNZ_sorted[:5]]
-        
-        print(y_pred_RRF)
-        print(y_pred_CombSum)
-        print(y_pred_CombMNZ)
-        
-        RRF_avg_precision     = average_precision_score(y_true, y_pred_RRF)
-        all_ap_RRF.append(RRF_avg_precision)
-        
-        CombSum_avg_precision = average_precision_score(y_true, y_pred_CombSum)
-        all_ap_CombSum.append(CombSum_avg_precision)
-        
-        CombMNZ_avg_precision = average_precision_score(y_true, y_pred_CombMNZ)
-        all_ap_CombMNZ.append(CombSum_avg_precision)
-        
-        #print(">>>RRF: "    ,RRF[:5])
-        #print(">>>CombSum: ",CombSum[:5])
-        #print(">>>CombMNZ: ",CombMNZ[:5])     
-        print("RRF_avg_precision", RRF_avg_precision)
-        print("CombSum_avg_precision", CombSum_avg_precision)
-        print("CombMNZ_avg_precision", CombMNZ_avg_precision)
-    
-        #print("RRF:", RRF)
-        #print("CombSum:", CombSum)
-        #print("CombMNZ:", CombMNZ)
-        
+            #print("RRF:", RRF)
+            #print("CombSum:", CombSum)
+            #print("CombMNZ:", CombMNZ)
+            
     
             
     mean_average_score_RRF = np.mean(np.array(all_ap_RRF))
