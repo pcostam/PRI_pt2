@@ -23,7 +23,7 @@ try3 = __import__('try3')
 
 def main():
     
-    train_set, test_set, test_set_sent  = get_dataset("test", t="word", stem_or_not_stem = "not stem")
+    train_set, test_set = get_dataset("test", t="word", stem_or_not_stem = "not stem")
     true_labels = json_references(stem_or_not_stem = "not stem")
     
     # train model WHEN USE EMBEDDINGS 
@@ -119,20 +119,17 @@ def get_dataset(folder, t="word", stem_or_not_stem = "not stem"):
                         sentence_string = sentence_string + " " + word
           
                 text += sentence_string
-                sentence_text.append(sentence_string)
-                
-        
+            
        #add dictionary. key is name of file.
         if(file_counter <= 375):
             docs[key] = text
         else:
-            test_set_sent[key] = sentence_text
             test_set[key] = [text]
 
         file_counter += 1
 
         
-    return docs.values(), test_set, test_set_sent
+    return docs.values(), test_set
 
 #From "\Inspec\references" extracts the real keyphrases of the documents
 #Input: token (optional) "stem" or "not stem"
@@ -303,7 +300,6 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model="", 
         print("test_doc_candidates", test_doc_candidates)
         test_doc_normalized = [' '.join(sentence) for sentence in test_doc_candidates]
         print("test_doc_normalized", test_doc_normalized)
-        raise
         X = vectorizer.fit_transform(test_doc_normalized)
         X = lil_matrix(X)
         Xc = (X.T * X) # this is co-occurrence matrix in sparse csr format
