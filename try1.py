@@ -13,6 +13,7 @@ import string
 #from nltk.stem import WordNetLemmatizer 
 import networkx as nx
 from collections import Counter 
+import regex as re
 
 #try2 = __import__('try2')
 
@@ -52,7 +53,7 @@ def extractKeyphrasesTextRank(file_content, tags = ['NN', 'NNS', 'NNP', 'NNPS', 
     for sent in sent_tokens:
         lst=[]
         for word in word_tokenize(sent):
-            if word.lower() not in stopwords_punctuation:
+            if (word.lower() not in stopwords_punctuation) and not(re.match('\d+', word)):
                 lst.append(word.lower())
                 #lst.append(lmtzr.lemmatize(word.lower()))
         sent_tokens_clean.append(' '.join(lst))
