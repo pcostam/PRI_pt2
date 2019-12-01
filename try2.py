@@ -46,7 +46,7 @@ def main():
             test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
   
             prior_weights = get_prior_weights(train_set, test_doc, variant = "length_and_position")
-            edge_weights = get_edge_weights(train_set, test_doc, variant = "embeddings", model=model)
+            edge_weights = get_edge_weights(train_set, test_doc, variant = "embeddings")
             
             nodes = try1.extractKeyphrasesTextRank(test_doc) 
             
