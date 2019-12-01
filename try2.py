@@ -30,9 +30,7 @@ def main():
     ##### put this in other place 
     #####---> PUS AQUI PARA NAO TAR SEMPRE A TREINAR 
     #####
-    print("start train")
-    model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
-    print("end train")
+    
      
 #    prior_weights = get_prior_weights(train_set, test_set, variant = "length_and_position")
 #    edge_weights = get_edge_weights(test_set, variant = "co-occurrences")
@@ -48,7 +46,7 @@ def main():
             test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
   
             prior_weights = get_prior_weights(train_set, test_doc, variant = "length_and_position")
-            edge_weights = get_edge_weights(train_set, test_doc, variant = "embeddings", model=model, test_doc_sent=test_set_sent[key])
+            edge_weights = get_edge_weights(train_set, test_doc, variant = "embeddings", model=model)
             
             nodes = try1.extractKeyphrasesTextRank(test_doc) 
             
@@ -98,7 +96,6 @@ def get_dataset(folder, t="word", stem_or_not_stem = "not stem"):
     for f in files:
         i += 1
         text = str()
-        sentence_text = list()
         base_name=os.path.basename(f)
         key = os.path.splitext(base_name)[0]
         doc = xml.dom.minidom.parse(f)
@@ -269,11 +266,6 @@ def extract_from_vector(feature_names, sorted_items):
     
     return results       
 
-def isNgram(term):
-    if(len(term.split()) >= 2):    
-        return True
-    return False
-
 
 from sklearn.feature_extraction.text import CountVectorizer    
 def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model="", test_doc_sent=[]):
@@ -320,6 +312,9 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model="", 
         # Tokenize(split) the sentences into candidates
         #test_doc_candidates = [try1.extractKeyphrasesTextRank(sentence)[0] for sentence in test_doc_sent]
         #print("test_doc_candidates", test_doc_candidates)
+        print("start train")
+        model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
+        print("end train")
     
         #### THIS MODEL COMMENTED IS USING JUST OUR TRAIN
         #model = gensim.models.Word2Vec(words_nodes, min_count=1)
