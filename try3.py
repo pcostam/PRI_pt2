@@ -8,25 +8,15 @@ try2 = __import__('try2')
 import numpy as np 
 from  more_itertools import unique_everseen
 import itertools
-from nltk import word_tokenize
-
+import networkx as nx
 
 def main():
     train_set, test_set  = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
     train_set = list(train_set)
     true_labels = try2.json_references(stem_or_not_stem = "not stem")
      
-    words_nodes = list()
-    for doc in train_set:
-        words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
-    words_nodes = list(unique_everseen(words_nodes))
-    
-    vectorizer = tf_idf_train(train_set, words_nodes)
-    vectorizer_tf = do_tf_train(train_set, words_nodes)
-    
-    #bm25
-    bm25 = try2.BM25(train_set)
-    
+    vectorizer, vectorizer_tf, bm25 = do_train(train_set)
+   
     all_ap_RRF = list()
     all_ap_CombSum = list()
     all_ap_CombMNZ = list()
@@ -36,32 +26,13 @@ def main():
         
         if(len(y_true) >= 5):
             #preprocess test document
-            test_doc = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
-           
-    
+            test_doc_candidates = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
+          
             print("key", key)
           
             print("y_true", y_true)
-            tfidf_vector = vectorizer.transform(test_doc)
+            RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(test_doc_candidates, vectorizer, vectorizer_tf, bm25)
          
-            tf_vector    = vectorizer_tf.transform(test_doc)
-            idf   = vectorizer.idf_
-         
-            tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
-            tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
-            idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
-           
-         
-            score_bm25 = bm25.get_score(test_doc)
-        
-            rankers = [tfidf_name, tf_name, idf_name, score_bm25]
-            RRF     = RRFScore(rankers)
-            CombSum = CombSumScore(rankers)
-            CombMNZ = CombMNZScore(rankers)
-            
-            RRF_sorted     = sorted(RRF.items()    , key = operator.itemgetter(1), reverse = True)
-            CombSum_sorted = sorted(CombSum.items(), key = operator.itemgetter(1), reverse = True)
-            CombMNZ_sorted = sorted(CombMNZ.items(), key = operator.itemgetter(1), reverse = True)
             
             y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
             y_pred_CombSum = [i[0] for i in CombSum_sorted[:5]]
@@ -100,7 +71,56 @@ def main():
     print("RRF_avg_precision",  mean_average_score_RRF)
     print("CombSum_avg_precision", mean_average_score_CombSum )
     print("CombMNZ_avg_precision",  mean_average_score_CombMNZ)
+
+def do_train(train_set):
+    words_nodes = generate_vocabulary(train_set)
+    vectorizer = tf_idf_train(train_set, words_nodes)
+    vectorizer_tf = do_tf_train(train_set, words_nodes)
+     #bm25
+    bm25 = try2.BM25(train_set)
     
+    return vectorizer, vectorizer_tf, bm25
+    
+def generate_vocabulary(train_set):
+    words_nodes = list()
+    for doc in train_set:
+        words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
+    words_nodes = list(unique_everseen(words_nodes))
+    return words_nodes
+    
+def do_score(test_doc_candidates, vectorizer, vectorizer_tf, bm25):   
+       tfidf_vector = vectorizer.transform(test_doc_candidates)
+     
+       tf_vector    = vectorizer_tf.transform(test_doc_candidates)
+       idf   = vectorizer.idf_
+     
+       tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
+       tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
+       idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
+       
+     
+       bm25_scores = bm25.get_score(test_doc_candidates)
+        
+       #pagerank
+       """
+       nodes = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
+       prior_weights = try2.get_prior_weights(train_set, nodes, variant = "length_and_position")
+       edge_weights = try2.get_edge_weights(train_set, nodes, variant = "co-occurrences")
+       nodes = try1.extractKeyphrasesTextRank(nodes) 
+       graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
+       pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
+       """
+        
+       rankers = [tfidf_name, tf_name, idf_name, bm25_scores]
+       RRF     = RRFScore(rankers)
+       CombSum = CombSumScore(rankers)
+       CombMNZ = CombMNZScore(rankers)
+        
+       RRF_sorted     = sorted(RRF.items()    , key = operator.itemgetter(1), reverse = True)
+       CombSum_sorted = sorted(CombSum.items(), key = operator.itemgetter(1), reverse = True)
+       CombMNZ_sorted = sorted(CombMNZ.items(), key = operator.itemgetter(1), reverse = True)
+       
+       return RRF_sorted, CombSum_sorted, CombMNZ_sorted
 def vector_scores(test_vector, feature_names):
     test_vector = test_vector.toarray()
    
