@@ -24,14 +24,11 @@ def main():
         
         y_true = true_labels[key]
         
-        if(len(y_true) >= 5):
-            #preprocess test document
-            test_doc_candidates = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
-          
+        if(len(y_true) >= 5):        
             print("key", key)
           
             print("y_true", y_true)
-            RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(test_doc_candidates, vectorizer, vectorizer_tf, bm25)
+            RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(test_doc, vectorizer, vectorizer_tf, bm25)
          
             
             y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
@@ -88,7 +85,8 @@ def generate_vocabulary(train_set):
     words_nodes = list(unique_everseen(words_nodes))
     return words_nodes
     
-def do_score(test_doc_candidates, vectorizer, vectorizer_tf, bm25):   
+def do_score(test_doc, vectorizer, vectorizer_tf, bm25):  
+       test_doc_candidates = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
        tfidf_vector = vectorizer.transform(test_doc_candidates)
      
        tf_vector    = vectorizer_tf.transform(test_doc_candidates)
