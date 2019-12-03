@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""
-Exercise-4
-"""
-
-from bs4 import BeautifulSoup 
-import re
-import matplotlib.pyplot as plt
+"""Exercise-4""" 
+from bs4 import BeautifulSoup
 from urllib.request import urlopen
 from xml.etree.ElementTree import parse
+from wordcloud import WordCloud
+from math import pi
+import re
+import matplotlib.pyplot as plt
+import numpy as np
 import itertools
-from wordcloud import WordCloud, ImageColorGenerator
+import pandas as pd
 try2 = __import__('try2')
 try3 = __import__('try3')
 
@@ -45,27 +45,27 @@ def main():
                   
                   
     #print(docs['Business'])
-    RRF_dict_results = dict()
     
     f = open('keyphrasesResults.html','w')
+    message = """<html>
+    <h1>Exercise 4 - A practical application</h1>
+    <body>
+    """
     vectorizer, vectorizer_tf, bm25 = try3.do_train(train_set)
     idx = 0
-    
+
     for cat, cat_docs in docs.items():
-        
         text = ' '.join(list(itertools.chain.from_iterable(cat_docs)))
         RRF_sorted, CombSum_sorted, CombMNZ_sorted = try3.do_score([text], vectorizer, vectorizer_tf, bm25)
-        if idx == 5:
-            break
-        idx += 1
         
-        res = dict(zip([i[0] for i in RRF_sorted], [i[1] for i in RRF_sorted[:10]]))
+        res = dict(zip([i[0] for i in RRF_sorted], [i[1] for i in RRF_sorted[:5]]))
         
         #BAR CHART
         plt.figure()
         plt.bar(range(len(res)), list(res.values()), align='center')
         plt.xticks(range(len(res)), list(res.keys()))
-        plt.savefig('fig'+ str(idx) + '.png',format='png')
+        plt.savefig('bar_chart'+ 'cat' + str(cat) + '.png',format='png')
+        message += """<img src=bar_chart"""  + """cat""" + str(cat) +""".png>""" 
         #plt.show()
         
         #WORD CLOUD
@@ -77,20 +77,67 @@ def main():
         wordcloud = WordCloud().generate(generated_text)
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
+        plt.savefig('word_cloud'+ 'cat' + str(cat) + '.png',format='png')
+        message += """<img src=word_cloud"""  + """cat""" + str(cat) +""".png>"""
         #plt.show()
         
-        #LOLLIPOP CHART
-        #plt.stem(list(res.keys())[:5], list(res.values())[:5])
-        #plt.ylim(0, 0.8)
-        #plt.show()
-
-#    message = """<html>
-#    <head>Exercise 4 - </head>
-#    <img src="fig.png">
-#    </html>"""
-#    
-#    f.write(message)
-#    f.close()   
+        #SPYDER CHART
+        keyphrases = [i[0] for i in CombSum_sorted[:5]]
+        
+        RRF_df = list()
+        CombSum_df = list()
+        CombMNZ_df = list()
+        
+        RRF_dict =  dict(zip([i[0] for i in RRF_sorted], [i[1] for i in RRF_sorted]))
+        CombSum_dict = dict(zip([i[0] for i in CombSum_sorted], [i[1] for i in CombSum_sorted]))
+        CombMNZ_dict = dict(zip([i[0] for i in CombMNZ_sorted], [i[1] for i in CombMNZ_sorted]))
+        
+        for kp in keyphrases:
+            RRF_df.append(RRF_dict[kp])
+            CombSum_df.append(CombSum_dict[kp])
+            CombMNZ_df.append(CombMNZ_dict[kp])
+        
+        df = pd.DataFrame({
+        'group': keyphrases,
+        'RRF': RRF_df,
+        'CombSum': CombSum_df,
+        'CombMNZ': CombMNZ_df
+       
+        })
+        
+        # number of variable
+        categories=list(df)[1:]
+        N = len(categories)
+        # We are going to plot the first line of the data frame.
+        # But we need to repeat the first value to close the circular graph:
+        values=df.loc[0].drop('group').values.flatten().tolist()
+        values += values[:1]
+        values
+        # What will be the angle of each axis in the plot? (we divide the plot / number of variable)
+        angles = [n / float(N) * 2 * pi for n in range(N)]
+        angles += angles[:1]
+        # Initialise the spider plot
+        ax = plt.subplot(111, polar=True)
+        # Draw one axe per variable + add labels labels yet
+        plt.xticks(angles[:-1], categories, color='grey', size=8)
+        # Draw ylabels
+        ax.set_rlabel_position(0)
+        plt.yticks([10,20,30], ["0.01","0.05","0.1"], color="grey", size=7)
+        plt.ylim(0,35)
+        # Plot data
+        ax.plot(angles, values, linewidth=1, linestyle='solid')
+        # Fill area
+        ax.fill(angles, values, 'b', alpha=0.1)
+        plt.savefig('spyder_'+ 'cat' + str(cat) + '.png',format='png')
+        message += """<img src=word_cloud"""  + """cat""" + str(cat) +""".png>
+        <br>"""
+        
+        fst=False
+        idx+=1
+    message += """</body>
+    </html>"""
+    f.write(message)
+    f.close()   
 
        
 def extract(content):
