@@ -14,52 +14,53 @@ import itertools
 from  more_itertools import unique_everseen
 from scipy.sparse import lil_matrix
 import numpy as np
-import gensim
-
-
+import nltk
 
 try1 = __import__('try1')
 try3 = __import__('try3')
 
 def main():
     
-    train_set, test_set = get_dataset("test", t="word", stem_or_not_stem = "not stem")
+    train_set, test_set  = get_dataset("test", t="word", stem_or_not_stem = "not stem")
     true_labels = json_references(stem_or_not_stem = "not stem")
     
-    # train model WHEN USE EMBEDDINGS 
-    ##### put this in other place 
-    #####---> PUS AQUI PARA NAO TAR SEMPRE A TREINAR 
-    #####
+#    import gensim
+#    print("start train")
+#    model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
+#    print("end train")
     
-     
-#    prior_weights = get_prior_weights(train_set, test_set, variant = "length_and_position")
-#    edge_weights = get_edge_weights(test_set, variant = "co-occurrences")
-    #print(prior_weights)
+    #### THIS MODEL COMMENTED IS USING JUST OUR TRAIN
+    words_nodes = []
+    for doc in train_set:
+        words_nodes += try1.extractKeyphrasesTextRank(doc)
+    import gensim
+    model = gensim.models.Word2Vec(words_nodes, min_count=1)
+    wv = model.wv
+    del model
+
     all_mAP = list()
     for key, test_doc in test_set.items():
         
         true_labels_doc = true_labels[key]
-        print("key", key)
         
         if len(true_labels_doc) >= 5:
             
-            test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
-  
-            prior_weights = get_prior_weights(train_set, test_doc, variant = "length_and_position")
-            edge_weights = get_edge_weights(train_set, test_doc, variant = "embeddings")
-            
-            nodes = try1.extractKeyphrasesTextRank(test_doc) 
-            
-            print("start build graph")
+            prior_weights = get_prior_weights(train_set, test_doc[0], variant = "likelihood")
+            print(prior_weights)
+            raise
+            edge_weights = get_edge_weights(train_set, test_doc[0], variant = "edit_distance", model=wv)
+
+            nodes = try1.extractKeyphrasesTextRank(test_doc[0]) 
             graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
-            print("end build graph")
             
             pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
             
             doc_top_5 = try1.get_top_x(pagerank_scores, 5)
             predicted_labels_doc = [x[0] for x in doc_top_5]
             
-              
+            
+            
+            
             avg_precision_per_doc = try3.average_precision_score(true_labels_doc, predicted_labels_doc)
             print("true>>", true_labels_doc)
             print("predi>> ", predicted_labels_doc)
@@ -67,7 +68,6 @@ def main():
             all_mAP.append(avg_precision_per_doc)
     
     mAP = np.array(all_mAP)
-    print(mAP)
     mAP = np.mean(mAP)
     print(mAP)
     
@@ -81,7 +81,6 @@ def get_dataset(folder, t="word", stem_or_not_stem = "not stem"):
     path = os.path.dirname(os.path.realpath('__file__')) + "\\Inspec\\" + folder
     ps = PorterStemmer()
     test_set = dict()
-    test_set_sent = dict()
     files = list()
     docs = dict()
     file_counter = 0
@@ -116,7 +115,7 @@ def get_dataset(folder, t="word", stem_or_not_stem = "not stem"):
                         sentence_string = sentence_string + " " + word
           
                 text += sentence_string
-            
+        
        #add dictionary. key is name of file.
         if(file_counter <= 375):
             docs[key] = text
@@ -157,6 +156,7 @@ def json_references(stem_or_not_stem = 'not stem'):
 
 def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
     words_nodes = []
+    
     #prior_weights = []
     
     score = dict()
@@ -189,7 +189,8 @@ def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
         
         
     elif(variant == "tfidf" or variant == "bm25"):
-  
+        test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc))))
+
         for doc in list(train_set):
             words_nodes += list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(doc)))
         #words_nodes = list(unique_everseen(words_nodes))
@@ -217,23 +218,33 @@ def get_prior_weights(train_set, test_doc, variant = "length_and_position"):
            
            
            score = extract_from_vector(feature_names,sorted_items)
-           #print(len(score))
-#           unnormalized_prior_weights = Y.toarray()                 
-#           
-#           sum_prior_weights = np.sum(unnormalized_prior_weights, axis=0)
-#           print(sum_prior_weights.shape)
-#           for sum_docs in sum_prior_weights:
-#               prior_weights.append(sum_docs/len(test_set.values()))
-#           print(len(prior_weights))
-           #print(X.toarray())
-           #print(vectorizer.get_feature_names())
         
         if variant == "bm25":
-            bm25 = BM25(words_nodes)
-            #words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc)))
-            score = bm25.get_score(test_doc)
+            bm25 = BM25(train_set)
+            words_nodes = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc)))
+            score = bm25.get_score(words_nodes)
             #print(get_score)
+    
+    from nltk import FreqDist, MLEProbDist        
+    if variant == "likelihood":
+        #TRAIN
+        words_nodes = []
+        for doc in train_set:
+            words_nodes.append(try1.extractKeyphrasesTextRank(doc))
+        words_nodes = list(itertools.chain.from_iterable(words_nodes))
+        words_nodes = ' '.join(list(itertools.chain.from_iterable(words_nodes)))
         
+        pdist1 = MLEProbDist(FreqDist(words_nodes))
+        
+        #TEST
+        words_nodes = try1.extractKeyphrasesTextRank(test_doc)
+        #words_nodes = unique_everseen(words_nodes)
+        
+        
+        for sent in words_nodes:
+            for gram in sent:      
+                score[gram] = nltk.log_likelihood([gram], [pdist1]) * 100  
+                print(score[gram])
     else:
         print(">>UNKNOWN>>PRIOR WEIGHTS>>VARIANT")
         
@@ -251,7 +262,7 @@ def extract_from_vector(feature_names, sorted_items):
     score_vals = []
     feature_vals = []
     
-    # word index and corresponding tf-idf score
+    # word index and corresponding scores
     for idx, score in sorted_items:
         
         #keep track of feature name and its corresponding score
@@ -265,17 +276,21 @@ def extract_from_vector(feature_names, sorted_items):
         results[feature_vals[idx]]=score_vals[idx]
     
     return results       
-
-
+   
 from sklearn.feature_extraction.text import CountVectorizer    
-def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model="", test_doc_sent=[]):
+def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model = ""):
     final_weights = []
-    words_nodes = []
-    for doc in train_set:
-        words_nodes += try1.extractKeyphrasesTextRank(doc)
-        #words_nodes = unique_everseen(words_nodes)
     
+    test_doc_candidates =  try1.extractKeyphrasesTextRank(test_doc)
+
     if variant == "co-occurrences":
+        
+        words_nodes = []
+        for doc in train_set:
+            words_nodes += try1.extractKeyphrasesTextRank(doc)
+        
+        test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc))))
+        
         vectorizer = CountVectorizer(binary = True,
                                      analyzer = 'word', 
                                      ngram_range = (1,3), 
@@ -288,14 +303,19 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model="", 
         #https://stackoverflow.com/questions/35562789/how-do-i-calculate-a-word-word-co-occurrence-matrix-with-sklearn
         #https://github.com/scikit-learn/scikit-learn/issues/10901
         
-        test_doc_candidates =  try1.extractKeyphrasesTextRank(test_doc)
-        print("test_doc_candidates", test_doc_candidates)
-        test_doc_normalized = [' '.join(sentence) for sentence in test_doc_candidates]
-        print("test_doc_normalized", test_doc_normalized)
-        X = vectorizer.fit_transform(test_doc_normalized)
+#        print("test_doc>>", test_doc)
+        
+       
+#        
+#        print("test_doc_candidates>>", test_doc_candidates)
+#        raise
+        
+        #test_doc_normalized = [' '.join(sentence) for sentence in test_doc_candidates]
+        
+        X = vectorizer.fit_transform(test_doc_candidates[0])
         X = lil_matrix(X)
         Xc = (X.T * X) # this is co-occurrence matrix in sparse csr format
-        #Xc[Xc > 0] = 1 # run this line if you don't want extra within-text cooccurence (see below) bem explicado no link above 
+        Xc[Xc > 0] = 1 # run this line if you don't want extra within-text cooccurence (see below) bem explicado no link above 
         Xc.setdiag(0) #  fill same word cooccurence to 0
         Xc = lil_matrix(Xc)
 #        print(vectorizer.get_feature_names())
@@ -305,86 +325,67 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model="", 
         final_weights = format_weights(Xc.tocoo(), feature_names)
         
     if variant == "embeddings":
-        #print("train len",len(words_nodes))
-        #print("test len", len(try1.extractKeyphrasesTextRank(test_doc)[0]))
-        #print("test_doc_sent", test_doc_sent)
         
-        # Tokenize(split) the sentences into candidates
-        #test_doc_candidates = [try1.extractKeyphrasesTextRank(sentence)[0] for sentence in test_doc_sent]
-        #print("test_doc_candidates", test_doc_candidates)
-        print("start train")
-        model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
-        print("end train")
-    
-        #### THIS MODEL COMMENTED IS USING JUST OUR TRAIN
-        #model = gensim.models.Word2Vec(words_nodes, min_count=1)
-        wv = model.wv
-        del model
+        feature_names = list(unique_everseen(itertools.chain.from_iterable(test_doc_candidates)))
         
-        #vocab_dict = gensim.corpora.Dictionary(test_doc_candidates)
-        #sm = wv.similarity_matrix(vocab_dict)
-        #print("shape sm", sm.shape)
-        #print("no terms", len(vocab_dict.token2id))
-        vocabulary =  list(set(try1.extractKeyphrasesTextRank(test_doc)[0]))
-        size = len(vocabulary)
-        print("size vocab", size)
-     
-        matrix = lil_matrix((size, size), dtype=float)
-        row_m = -1
-        print("start csc matrix populate")
-        for term_i in vocabulary:
-            col_m = -1
-            row_m += 1
-            for term_j in vocabulary:
-                col_m += 1
-                i = 0
-                acc = 0
-                try:
-                   grams_i = term_i.split()
-                   grams_j = term_j.split()
-                   
-                   for g_i in grams_i:
-                       for g_j in grams_j:       
-                           i += 1
-                           acc += wv.similarity(g_i, g_j)
-                           sim = acc/i
-                           matrix[row_m, col_m] = sim
-                except KeyError as e:
-                    continue
-   
+        similarity_matrix = lil_matrix((len(feature_names), len(feature_names)), dtype=float)
+        
+        
+        test_doc = try1.extractKeyphrasesTextRank(test_doc)
+        for sent in test_doc:
+            for gram1 in range(0, len(sent)):
+                for gram2 in range(gram1, len(sent)):
                     
-      
-        print("end") 
-        #print("matrix", matrix)
-        print("start format")
-        #final_weights = format_weights(wv.similarity_matrix(vocab_dict).tocoo(), list(wv.vocab.keys()))
-        final_weights = format_weights(matrix.tocoo(), vocabulary)
-        print("end format")
-        
-                
-
+                    if feature_names[gram1] != feature_names[gram2] and feature_names[gram1] in sent and feature_names[gram2] in sent:
+                            
+                            grams_i = feature_names[gram1].split()
+                            grams_j = feature_names[gram2].split()
+                            
+                            i = 0
+                            acc = 0
+                            for g_i in grams_i:
+                                for g_j in grams_j:
+                                    i += 1
+                                    try:
+                                        acc += model.similarity(g_i, g_j)
+                                    except KeyError as e:
+                                        continue
+                            similarity = acc/i
+                            similarity_matrix[gram1,gram2] = similarity
+                            
+        final_weights = format_weights(similarity_matrix.tocoo(), feature_names)
+#https://www.irit.fr/publis/SIG/2018_SAC_MRR.pdf
+#https://gluon-nlp.mxnet.io/examples/word_embedding/word_embedding.html
+#https://kavita-ganesan.com/easily-access-pre-trained-word-embeddings-with-gensim/#.Xd1ikej7Q2w QUEEN
+#https://www.shanelynn.ie/word-embeddings-in-python-with-spacy-and-gensim/ 
+    if variant == "edit_distance":
+       feature_names = list(unique_everseen(itertools.chain.from_iterable(test_doc_candidates)))  
             
-        
+       edit_distance_matrix = lil_matrix((len(feature_names), len(feature_names)), dtype=float)         
+       
+       test_doc = try1.extractKeyphrasesTextRank(test_doc)
+       for sent in test_doc:
+            for gram1 in range(0, len(sent)):
+                for gram2 in range(gram1, len(sent)):
+                   if feature_names[gram1] != feature_names[gram2] and feature_names[gram1] in sent and feature_names[gram2] in sent:                                      
+                       edit_distance_matrix[gram1,gram2] = 1/(nltk.edit_distance(feature_names[gram1], feature_names[gram2]))
+            
+       final_weights = format_weights(edit_distance_matrix.tocoo(), feature_names)
+
     return final_weights
         
-        #print(Xc.toarray()) # print out matrix in dense format
 
-#    if variant == "embeddings":
-# https://www.irit.fr/publis/SIG/2018_SAC_MRR.pdf
-#        https://gluon-nlp.mxnet.io/examples/word_embedding/word_embedding.html
-#https://kavita-ganesan.com/easily-access-pre-trained-word-embeddings-with-gensim/#.Xd1ikej7Q2w QUEEN
-#https://www.shanelynn.ie/word-embeddings-in-python-with-spacy-and-gensim/        
-#    if variant == "distance_between_candidates":
+       
+    
         
 def format_weights(Xc, feature_names):
     listTuplesWeights = []
-    print("start format weight")
     for  line, column, data in zip(Xc.row, Xc.col, Xc.data):
         if(line != column):
             listTuplesWeights.append(tuple([feature_names[line], feature_names[column], data]))
-    print("end format weight")
     return listTuplesWeights
     #for candidate in        
+        
 
 #if __name__ == "__main__":
 #    main()
