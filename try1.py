@@ -9,6 +9,7 @@ from nltk.corpus import stopwords
 import string
 import networkx as nx
 import regex as re
+import itertools
 
 #https://xang1234.github.io/textrank/ == corpus
 fIn = "corpus.txt"
@@ -18,7 +19,13 @@ def main():
     file_content = open_file()
     nodes = extractKeyphrasesTextRank(str(file_content))
     graph = buildGraph(nodes, exercise2 = False)  
-    pagerank_scores = nx.pagerank(graph, max_iter = 50)
+    
+    nstart = dict()
+    nodes_set = set(itertools.chain.from_iterable(nodes))
+    for gram in nodes_set:
+        nstart[gram] = 1/len(nodes_set)
+    
+    pagerank_scores = nx.pagerank(graph, max_iter = 50, nstart = nstart)
     return get_top_x(pagerank_scores, 5)
 
 def open_file():
