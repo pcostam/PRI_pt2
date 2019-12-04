@@ -25,19 +25,19 @@ def main():
     train_set, test_set  = get_dataset("test", t="word", stem_or_not_stem = "not stem")
     true_labels = json_references(stem_or_not_stem = "not stem")
     
-    import gensim
-    print("start train")
-    model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
-    print("end train")
+#    import gensim
+#    print("start train")
+#    model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
+#    print("end train")
     
 #    #### THIS MODEL COMMENTED IS USING JUST OUR TRAIN
-#    words_nodes = []
-#    for doc in train_set:
-#        words_nodes += try1.extractKeyphrasesTextRank(doc)
-#    import gensim
-#    model = gensim.models.Word2Vec(words_nodes, min_count=1)
-#    wv = model.wv
-#    del model
+    words_nodes = []
+    for doc in train_set:
+        words_nodes += try1.extractKeyphrasesTextRank(doc)
+    import gensim
+    model = gensim.models.Word2Vec(words_nodes, min_count=1)
+    wv = model.wv
+    del model
 
     all_mAP = list()
     for key, test_doc in test_set.items():
@@ -48,12 +48,16 @@ def main():
             
             prior_weights = get_prior_weights(train_set, test_doc[0], variant = "length_and_position")   #length_and_position/tfidf/bm25/likelihood
 
-            edge_weights = get_edge_weights(train_set, test_doc[0], variant = "embeddings", model=model)    #co-occurrences/embeddings/edit_distance
+            edge_weights = get_edge_weights(train_set, test_doc[0], variant = "edit_distance", model=wv)    #co-occurrences/embeddings/edit_distance
 
             nodes = try1.extractKeyphrasesTextRank(test_doc[0]) 
             graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
             
-            pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
+            nstart = dict()
+            nodes_set = set(itertools.chain.from_iterable(nodes))
+            for gram in nodes_set:
+                nstart[gram] = 1/len(nodes_set)        
+            pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50, nstart = nstart)
             
             doc_top_5 = try1.get_top_x(pagerank_scores, 5)
             predicted_labels_doc = [x[0] for x in doc_top_5]
@@ -281,7 +285,7 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model = ""
         for doc in train_set:
             words_nodes += try1.extractKeyphrasesTextRank(doc)
         
-        test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc))))
+        #test_doc = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc))))
         
         vectorizer = CountVectorizer(binary = True,
                                      analyzer = 'word', 
@@ -324,30 +328,33 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model = ""
         
         test_doc = try1.extractKeyphrasesTextRank(test_doc)
         
-        row_m = -1
-        for gram1 in feature_names:
-             
-            col_m = -1
-            row_m += 1
-            
-            for gram2 in feature_names:
-                col_m += 1
+        for sent in test_doc:
+            row_m = -1
+            for gram1 in feature_names:
+                 
+                col_m = -1
+                row_m += 1
                 
-                i = 0
-                acc = 0
-                
-                grams_i = gram1.split()
-                grams_j = gram2.split()
-                
-                for g_i in grams_i:
-                    for g_j in grams_j:
-                        i += 1
-                        try:
-                            acc += model.similarity(g_i, g_j)
-                        except KeyError as e:
-                            continue
-                similarity = acc/i
-                similarity_matrix[row_m, col_m] = similarity
+                for gram2 in feature_names:
+                    col_m += 1
+                    
+                    if gram1 in sent and gram2 in sent and gram1 != gram2: 
+                    
+                        i = 0
+                        acc = 0
+                        
+                        grams_i = gram1.split()
+                        grams_j = gram2.split()
+                        
+                        for g_i in grams_i:
+                            for g_j in grams_j:
+                                i += 1
+                                try:
+                                    acc += model.similarity(g_i, g_j)
+                                except KeyError as e:
+                                    continue
+                        similarity = acc/i
+                        similarity_matrix[row_m, col_m] = similarity
 #        for sent in test_doc:        
 #            for gram1 in range(0, len(sent)):
 #                for gram2 in range(gram1, len(sent)):
@@ -375,16 +382,40 @@ def get_edge_weights(train_set, test_doc, variant = "co-occurrences", model = ""
 #https://kavita-ganesan.com/easily-access-pre-trained-word-embeddings-with-gensim/#.Xd1ikej7Q2w QUEEN
 #https://www.shanelynn.ie/word-embeddings-in-python-with-spacy-and-gensim/ 
     elif variant == "edit_distance":
+       
        feature_names = list(unique_everseen(itertools.chain.from_iterable(test_doc_candidates)))  
             
        edit_distance_matrix = lil_matrix((len(feature_names), len(feature_names)), dtype=float)         
        
        test_doc = try1.extractKeyphrasesTextRank(test_doc)
        for sent in test_doc:
-            for gram1 in range(0, len(sent)):
-                for gram2 in range(gram1, len(sent)):
-                   if feature_names[gram1] != feature_names[gram2] and feature_names[gram1] in sent and feature_names[gram2] in sent:                                      
-                       edit_distance_matrix[gram1,gram2] = 1/(nltk.edit_distance(feature_names[gram1], feature_names[gram2]))
+           row_m = -1
+           for gram1 in feature_names:
+                 
+                col_m = -1
+                row_m += 1
+                
+                for gram2 in feature_names:
+                    col_m += 1
+                    
+                    if gram1 in sent and gram2 in sent and gram1 != gram2: 
+                    #http://www.nltk.org/howto/metrics.html
+                    #https://www.nltk.org/api/nltk.metrics.html
+                    #https://www.datacamp.com/community/tutorials/fuzzy-string-python
+                    #edit_distance - 0.0153571428571
+                    #binary_distance - 0.0280357142857
+                    #jaro_similarity - n consegui pq sou naba
+                    #edit_distance_align - n consegui
+                    #masi_distance - n consegui
+                    #jaccard_distance - n consegui
+                        edit_distance_matrix[row_m,col_m] = 1/(nltk.edit_distance(gram1, gram2))
+           
+           
+           
+#            for gram1 in range(0, len(sent)):
+#                for gram2 in range(gram1, len(sent)):
+#                   if feature_names[gram1] != feature_names[gram2] and feature_names[gram1] in sent and feature_names[gram2] in sent:                                      
+#                       edit_distance_matrix[gram1,gram2] = 1/(nltk.edit_distance(feature_names[gram1], feature_names[gram2]))
             
        final_weights = format_weights(edit_distance_matrix.tocoo(), feature_names)
        
