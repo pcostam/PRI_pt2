@@ -20,54 +20,68 @@ def main():
     all_ap_RRF = list()
     all_ap_CombSum = list()
     all_ap_CombMNZ = list()
-    for key, test_doc in test_set.items():
-        
-        y_true = true_labels[key]
-        
-        if(len(y_true) >= 5):        
-            print("key", key)
-          
-            print("y_true", y_true)
-            RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(test_doc, vectorizer, vectorizer_tf, bm25)
-         
-            
-            y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
-            y_pred_CombSum = [i[0] for i in CombSum_sorted[:5]]
-            y_pred_CombMNZ = [i[0] for i in CombMNZ_sorted[:5]]
-            
-            print(y_pred_RRF)
-            print(y_pred_CombSum)
-            print(y_pred_CombMNZ)
-            
-            RRF_avg_precision     = average_precision_score(y_true, y_pred_RRF)
-            all_ap_RRF.append(RRF_avg_precision)
-            
-            CombSum_avg_precision = average_precision_score(y_true, y_pred_CombSum)
-            all_ap_CombSum.append(CombSum_avg_precision)
-            
-            CombMNZ_avg_precision = average_precision_score(y_true, y_pred_CombMNZ)
-            all_ap_CombMNZ.append(CombSum_avg_precision)
-            
-            #print(">>>RRF: "    ,RRF[:5])
-            #print(">>>CombSum: ",CombSum[:5])
-            #print(">>>CombMNZ: ",CombMNZ[:5])     
-            print("RRF_avg_precision", RRF_avg_precision)
-            print("CombSum_avg_precision", CombSum_avg_precision)
-            print("CombMNZ_avg_precision", CombMNZ_avg_precision)
-        
-            #print("RRF:", RRF)
-            #print("CombSum:", CombSum)
-            #print("CombMNZ:", CombMNZ)
-            
     
-            
-    mean_average_score_RRF = np.mean(np.array(all_ap_RRF))
-    mean_average_score_CombSum = np.mean(np.array(all_ap_CombSum))
-    mean_average_score_CombMNZ = np.mean(np.array(all_ap_CombSum))
+    features = ["bm25", "idf", "tf", "tfidf", "centrality"]
+    f = open("test.txt", "x")
+    for L in range(0, len(features)+1):
+        for combination_features in itertools.combinations(features, L):
+            print(">>>>>>features used:", combination_features)
     
-    print("RRF_avg_precision",  mean_average_score_RRF)
-    print("CombSum_avg_precision", mean_average_score_CombSum )
-    print("CombMNZ_avg_precision",  mean_average_score_CombMNZ)
+            if combination_features == ():
+                continue
+            f.write("features used:" + str(combination_features) + "\n")
+            for key, test_doc in test_set.items():
+                
+                y_true = true_labels[key]
+                
+                if(len(y_true) >= 5):        
+                    print("key", key)
+                  
+                    print("y_true", y_true)
+                    RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_features=combination_features)
+                 
+                    
+                    y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
+                    y_pred_CombSum = [i[0] for i in CombSum_sorted[:5]]
+                    y_pred_CombMNZ = [i[0] for i in CombMNZ_sorted[:5]]
+                    
+                    print(y_pred_RRF)
+                    print(y_pred_CombSum)
+                    print(y_pred_CombMNZ)
+                    
+                    RRF_avg_precision     = average_precision_score(y_true, y_pred_RRF)
+                    all_ap_RRF.append(RRF_avg_precision)
+                    
+                    CombSum_avg_precision = average_precision_score(y_true, y_pred_CombSum)
+                    all_ap_CombSum.append(CombSum_avg_precision)
+                    
+                    CombMNZ_avg_precision = average_precision_score(y_true, y_pred_CombMNZ)
+                    all_ap_CombMNZ.append(CombSum_avg_precision)
+                    
+                    #print(">>>RRF: "    ,RRF[:5])
+                    #print(">>>CombSum: ",CombSum[:5])
+                    #print(">>>CombMNZ: ",CombMNZ[:5])     
+                    print("RRF_avg_precision", RRF_avg_precision)
+                    print("CombSum_avg_precision", CombSum_avg_precision)
+                    print("CombMNZ_avg_precision", CombMNZ_avg_precision)
+                
+                    #print("RRF:", RRF)
+                    #print("CombSum:", CombSum)
+                    #print("CombMNZ:", CombMNZ)
+                    
+            
+                    
+            mean_average_score_RRF = np.mean(np.array(all_ap_RRF))
+            mean_average_score_CombSum = np.mean(np.array(all_ap_CombSum))
+            mean_average_score_CombMNZ = np.mean(np.array(all_ap_CombSum))
+            
+            print("RRF_mean_avg_precision",  mean_average_score_RRF)
+            print("CombSum_mean_avg_precision", mean_average_score_CombSum )
+            print("CombMNZ_mean_avg_precision",  mean_average_score_CombMNZ)
+            
+            
+            f.write("\n RRF MAP " + str(mean_average_score_RRF) + "\n" + "CombSum MAP " + str(mean_average_score_CombSum) + "\n CombMNZ MAP" + str(mean_average_score_CombMNZ) + "\n")
+    f.close()
 
 def do_train(train_set):
     words_nodes = generate_vocabulary(train_set)
@@ -85,8 +99,9 @@ def generate_vocabulary(train_set):
     words_nodes = list(unique_everseen(words_nodes))
     return words_nodes
     
-def do_score(test_doc, vectorizer, vectorizer_tf, bm25):  
+def do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_features = ''):  
        test_doc_candidates = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
+       
        tfidf_vector = vectorizer.transform(test_doc_candidates)
      
        tf_vector    = vectorizer_tf.transform(test_doc_candidates)
@@ -100,16 +115,24 @@ def do_score(test_doc, vectorizer, vectorizer_tf, bm25):
        bm25_scores = bm25.get_score(test_doc_candidates)
         
        #pagerank
-       """
        nodes = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
-       prior_weights = try2.get_prior_weights(train_set, nodes, variant = "length_and_position")
        edge_weights = try2.get_edge_weights(train_set, nodes, variant = "co-occurrences")
        nodes = try1.extractKeyphrasesTextRank(nodes) 
        graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
-       pagerank_scores = nx.pagerank(graph, personalization = prior_weights, max_iter = 50)
-       """
-        
-       rankers = [tfidf_name, tf_name, idf_name, bm25_scores]
+       centrality_scores = nx.degree_centrality(graph)
+       
+       rankers = []
+       if "bm25" in combination_features:
+           rankers.append(bm25_scores)
+       if "idf" in combination_features:
+           rankers.append(idf_name)
+       if "tf" in combination_features:
+           rankers.append(tf_name)
+       if "tfidf" in combination_features:
+           rankers.append(tfidf_name)
+       if "centrality" in combination_features:
+           rankers.append(centrality_scores)
+           
        RRF     = RRFScore(rankers)
        CombSum = CombSumScore(rankers)
        CombMNZ = CombMNZScore(rankers)
