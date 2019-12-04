@@ -48,6 +48,11 @@ def main():
     
     f = open('keyphrasesResults.html','w')
     message = """<html>
+    <style>
+    html, body, h1, h2, h3, h4, h5, h6 {
+            font-family: "Lucida Console", cursive, sans-serif;
+    }
+    </style>
     <h1>Exercise 4 - A practical application</h1>
     <body>
     """
@@ -60,15 +65,16 @@ def main():
         
         res = dict(zip([i[0] for i in RRF_sorted], [i[1] for i in RRF_sorted[:5]]))
         
-        #BAR CHART
+        #BAR CHART -- SO RRF
         plt.figure()
         plt.bar(range(len(res)), list(res.values()), align='center')
         plt.xticks(range(len(res)), list(res.keys()))
         plt.savefig('bar_chart'+ 'cat' + str(cat) + '.png',format='png')
+        message += """<h3>"""+ str(cat) + """</h3>"""
         message += """<img src=bar_chart"""  + """cat""" + str(cat) +""".png>""" 
-        #plt.show()
+        plt.show()
         
-        #WORD CLOUD
+        #WORD CLOUD -- SO RRF
         generated_text = ""
         for key, val in res.items():
             occur = int(val*100)
@@ -78,8 +84,9 @@ def main():
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
         plt.savefig('word_cloud'+ 'cat' + str(cat) + '.png',format='png')
+        #message += """<h3>"""+ str(cat) + """</h3>"""
         message += """<img src=word_cloud"""  + """cat""" + str(cat) +""".png>"""
-        #plt.show()
+        plt.show()
         
         #SPYDER CHART
         keyphrases = [i[0] for i in CombSum_sorted[:5]]
@@ -111,8 +118,10 @@ def main():
         # We are going to plot the first line of the data frame.
         # But we need to repeat the first value to close the circular graph:
         values=df.loc[0].drop('group').values.flatten().tolist()
+        #print("values, ", values)
         values += values[:1]
-        values
+        #Sprint("values, ", values)
+        
         # What will be the angle of each axis in the plot? (we divide the plot / number of variable)
         angles = [n / float(N) * 2 * pi for n in range(N)]
         angles += angles[:1]
@@ -128,11 +137,11 @@ def main():
         ax.plot(angles, values, linewidth=1, linestyle='solid')
         # Fill area
         ax.fill(angles, values, 'b', alpha=0.1)
-        plt.savefig('spyder_'+ 'cat' + str(cat) + '.png',format='png')
-        message += """<img src=word_cloud"""  + """cat""" + str(cat) +""".png>
+        plt.savefig('spyder_chart_'+ 'cat' + str(cat) + '.png',format='png')
+        #message += """<h3>"""+ str(cat) + """</h3>"""
+        message += """<img src=spyder_chart_"""  + """cat""" + str(cat) +""".png>
         <br>"""
-        
-        fst=False
+
         idx+=1
     message += """</body>
     </html>"""
