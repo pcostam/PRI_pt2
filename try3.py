@@ -106,33 +106,32 @@ def do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_f
      
        tf_vector    = vectorizer_tf.transform(test_doc_candidates)
        idf   = vectorizer.idf_
-     
-       tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
-       tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
-       idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
-       
-     
-       bm25_scores = bm25.get_score(test_doc_candidates)
-        
-       #pagerank
-       nodes = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
-       edge_weights = try2.get_edge_weights(train_set, nodes, variant = "co-occurrences")
-       nodes = try1.extractKeyphrasesTextRank(nodes) 
-       graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
-       centrality_scores = nx.degree_centrality(graph)
-       
+  
        rankers = []
-       if "bm25" in combination_features:
-           rankers.append(bm25_scores)
-       if "idf" in combination_features:
-           rankers.append(idf_name)
        if "tf" in combination_features:
+           tf_name    = map_name_score( tf_vector.tocoo(), vectorizer_tf.get_feature_names())
            rankers.append(tf_name)
-       if "tfidf" in combination_features:
-           rankers.append(tfidf_name)
-       if "centrality" in combination_features:
-           rankers.append(centrality_scores)
            
+       if "tfidf" in combination_features:
+           tfidf_name = map_name_score(tfidf_vector.tocoo(), vectorizer.get_feature_names())
+           rankers.append(tfidf_name)
+           
+       if "idf" in combination_features:
+           idf_name   = dict(zip( vectorizer.get_feature_names(), idf))
+           rankers.append(idf_name)
+           
+       if "bm25" in combination_features:
+           bm25_scores = bm25.get_score(test_doc_candidates)
+           rankers.append(bm25_scores)
+           
+       if "centrality" in combination_features:
+           nodes = ' '.join(list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0]))))
+           edge_weights = try2.get_edge_weights(train_set, nodes, variant = "co-occurrences")
+           nodes = try1.extractKeyphrasesTextRank(nodes) 
+           graph = try1.buildGraph(nodes, edge_weights, exercise2 = True)
+           centrality_scores = nx.degree_centrality(graph)
+           rankers.append(centrality_scores)
+                  
        RRF     = RRFScore(rankers)
        CombSum = CombSumScore(rankers)
        CombMNZ = CombMNZScore(rankers)
