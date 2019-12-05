@@ -21,8 +21,14 @@ def main():
     all_ap_CombSum = list()
     all_ap_CombMNZ = list()
     
-    features = ["bm25", "idf", "tf", "tfidf", "centrality"]
+    features = ["bm25", "idf", "tf", "tfidf"]
     f = open("test.txt", "x")
+ 
+    #import gensim
+    print("start train")
+    #model = gensim.models.KeyedVectors.load_word2vec_format('wiki-news-300d-1M.vec')
+    print("end train")
+    model = ''
     for L in range(0, len(features)+1):
         for combination_features in itertools.combinations(features, L):
             print(">>>>>>features used:", combination_features)
@@ -38,7 +44,7 @@ def main():
                     print("key", key)
                   
                     print("y_true", y_true)
-                    RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_features=combination_features)
+                    RRF_sorted, CombSum_sorted, CombMNZ_sorted = do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_features=combination_features, model=model)
                  
                     
                     y_pred_RRF = [i[0] for i in RRF_sorted[:5]] 
@@ -56,7 +62,7 @@ def main():
                     all_ap_CombSum.append(CombSum_avg_precision)
                     
                     CombMNZ_avg_precision = average_precision_score(y_true, y_pred_CombMNZ)
-                    all_ap_CombMNZ.append(CombSum_avg_precision)
+                    all_ap_CombMNZ.append(CombMNZ_avg_precision)
                     
                     #print(">>>RRF: "    ,RRF[:5])
                     #print(">>>CombSum: ",CombSum[:5])
@@ -73,7 +79,7 @@ def main():
                     
             mean_average_score_RRF = np.mean(np.array(all_ap_RRF))
             mean_average_score_CombSum = np.mean(np.array(all_ap_CombSum))
-            mean_average_score_CombMNZ = np.mean(np.array(all_ap_CombSum))
+            mean_average_score_CombMNZ = np.mean(np.array(all_ap_CombMNZ))
             
             print("RRF_mean_avg_precision",  mean_average_score_RRF)
             print("CombSum_mean_avg_precision", mean_average_score_CombSum )
@@ -83,11 +89,12 @@ def main():
             f.write("\n RRF MAP " + str(mean_average_score_RRF) + "\n" + "CombSum MAP " + str(mean_average_score_CombSum) + "\n CombMNZ MAP" + str(mean_average_score_CombMNZ) + "\n")
     f.close()
 
+
 def do_train(train_set):
     words_nodes = generate_vocabulary(train_set)
     vectorizer = tf_idf_train(train_set, words_nodes)
     vectorizer_tf = do_tf_train(train_set, words_nodes)
-     #bm25
+    #bm25
     bm25 = try2.BM25(train_set)
     
     return vectorizer, vectorizer_tf, bm25
@@ -99,7 +106,7 @@ def generate_vocabulary(train_set):
     words_nodes = list(unique_everseen(words_nodes))
     return words_nodes
     
-def do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_features = ''):  
+def do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_features = '', model=''):  
        test_doc_candidates = list(itertools.chain.from_iterable(try1.extractKeyphrasesTextRank(test_doc[0])))
        
        tfidf_vector = vectorizer.transform(test_doc_candidates)
@@ -132,45 +139,50 @@ def do_score(train_set, test_doc, vectorizer, vectorizer_tf, bm25, combination_f
            centrality_scores = nx.degree_centrality(graph)
            rankers.append(centrality_scores)
                   
-       RRF     = RRFScore(rankers)
-       CombSum = CombSumScore(rankers)
-       CombMNZ = CombMNZScore(rankers)
+       RRF     = RRFScore(rankers, scale=True)
+       CombSum = CombSumScore(rankers, scale=True)
+       CombMNZ = CombMNZScore(rankers, scale=True)
         
        RRF_sorted     = sorted(RRF.items()    , key = operator.itemgetter(1), reverse = True)
        CombSum_sorted = sorted(CombSum.items(), key = operator.itemgetter(1), reverse = True)
        CombMNZ_sorted = sorted(CombMNZ.items(), key = operator.itemgetter(1), reverse = True)
        
        return RRF_sorted, CombSum_sorted, CombMNZ_sorted
-def vector_scores(test_vector, feature_names):
-    test_vector = test_vector.toarray()
-   
-    for i in range(0, test_vector.shape[0]):
-        for j in range(0, test_vector.shape[1]):
-            if test_vector[i,j] != 0:
-                    test_vector[i,j] =  test_vector[i,j] * len(feature_names[j].split())
-                    
-    test_vector = sparse.csr_matrix(test_vector)
-    return test_vector
-def CombMNZScore(rankers):
+
+def CombMNZScore(rankers, scale=False):
     dictCombMNZ = dict()
     #number of ranks where term occurs
     dictCountRank = dict()
+    min_th = 0.01
     for ranker in rankers:
         for key, rank in ranker.items():
-            if key not in dictCountRank.keys():
-                dictCountRank[key] = 1
+            if rank > min_th: 
+                
+                if key not in dictCountRank.keys():
+                    dictCountRank[key] = 1
+                    
+                else:
+                    dictCountRank[key] += 1
             else:
-                dictCountRank[key] += 1
+                dictCountRank[key] = 0
+            
             
     for ranker in rankers:
         for key, rank in ranker.items():
-              if key not in dictCombMNZ.keys():
-                  dictCombMNZ[key] = dictCountRank[key]*rank
-              else:
-                  dictCombMNZ[key] += dictCountRank[key]*rank
+                      if key not in dictCombMNZ.keys():  
+                          dictCombMNZ[key] = rank
+                      else:
+                         dictCombMNZ[key] += rank
+    
+   
+    for key, rank in dictCombMNZ.items():
+            dictCombMNZ[key] *=  dictCountRank[key]
+            if scale:
+                dictCombMNZ[key] *= len(str(key.split()))
+    
     return dictCombMNZ
     
-def CombSumScore(rankers):
+def CombSumScore(rankers, scale=False):
     dictCombSum = dict()
     for ranker in rankers:
         for key, rank in ranker.items():
@@ -178,16 +190,25 @@ def CombSumScore(rankers):
                   dictCombSum[key] = rank
               else:
                   dictCombSum[key] += rank
+    if scale:
+        for key, rank in dictCombSum.items():           
+            dictCombSum[key] *= len(str(key.split()))
+            
     return dictCombSum
     
-def RRFScore(rankers):
+def RRFScore(rankers, scale=False):
     dictRRF = {}
     for ranker in rankers:
         for key, rank in ranker.items():
               if key not in dictRRF.keys():
                     dictRRF[key] = 1/(50+rank)
               else:
-                    dictRRF[key] += 1/(50+rank)                
+                    dictRRF[key] += 1/(50+rank)     
+                    
+    if scale:
+        for key, rank in dictRRF.items():           
+            dictRRF[key] *= len(str(key.split()))
+            
     return dictRRF
 
 def do_tf_train(doc, vocab, maxdf=1, mindf=1):
