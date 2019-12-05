@@ -87,11 +87,11 @@ def buildGraph(nodes, edge_weights = [], exercise2 = False):
     gr = nx.Graph()  # initialize an undirected graph
     for sent in nodes:
         gr.add_nodes_from(sent)
-        for gram1 in range(0, len(sent)):
-            for gram2 in range(gram1, len(sent)):
-                if sent[gram1] != sent[gram2] and sent[gram1] not in sent[gram2] and sent[gram2] not in sent[gram1]:
-                    if  exercise2 == False:
-                        gr.add_edge(sent[gram1], sent[gram2], weight = 1)
+        if  exercise2 == False:
+            for gram1 in range(0, len(sent)):
+                for gram2 in range(gram1, len(sent)):
+                    if sent[gram1] != sent[gram2] and sent[gram1] not in sent[gram2] and sent[gram2] not in sent[gram1]:
+                            gr.add_edge(sent[gram1], sent[gram2], weight = 1)
     if exercise2 == True:
         gr.add_weighted_edges_from(edge_weights)
     return gr
