@@ -5,11 +5,12 @@ from urllib.request import urlopen
 from xml.etree.ElementTree import parse
 from wordcloud import WordCloud
 from math import pi
+from sklearn.datasets import fetch_20newsgroups
 import re
 import matplotlib.pyplot as plt
-import numpy as np
 import itertools
 import pandas as pd
+
 try2 = __import__('try2')
 try3 = __import__('try3')
 
@@ -17,7 +18,13 @@ def main():
     files = dict()
     docs = dict()
     
-    train_set, test_set = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
+    #train_set, test_set = try2.get_dataset("test", t="word", stem_or_not_stem = "not stem")
+    train_set_aux = get_20_news_group(600)
+    dictOfWords = { i : train_set_aux[i] for i in range(0, len(train_set_aux) ) }
+    train_set = dictOfWords.values()
+    #print(type(train_set))
+    #print(train_set)
+
     doc = urlopen("https://archive.nytimes.com/www.nytimes.com/services/xml/rss/index.html").read()
     links_xml_dict = extract(doc)
     
@@ -61,9 +68,11 @@ def main():
 
     for cat, cat_docs in docs.items():
         text = ' '.join(list(itertools.chain.from_iterable(cat_docs)))
-        RRF_sorted, CombSum_sorted, CombMNZ_sorted = try3.do_score([text], vectorizer, vectorizer_tf, bm25)
+        RRF_sorted, CombSum_sorted, CombMNZ_sorted = try3.do_score(train_set, [text], vectorizer, vectorizer_tf, bm25, combination_features = ('tf','tfidf', 'idf', 'bm25'))
         
         res = dict(zip([i[0] for i in RRF_sorted], [i[1] for i in RRF_sorted[:5]]))
+    
+        print("res: ", res)
         
         #BAR CHART -- SO RRF
         plt.figure()
@@ -79,7 +88,7 @@ def main():
         for key, val in res.items():
             occur = int(val*100)
             generated_text += " " +  key + " " * occur
-
+        
         wordcloud = WordCloud().generate(generated_text)
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
@@ -171,3 +180,8 @@ def extract(content):
                         cat_dict[category] += [link]
                         links.append(link)
     return cat_dict
+
+def get_20_news_group(size):
+    docs = fetch_20newsgroups(subset = 'train') 
+    
+    return docs.data[:size + 1]
